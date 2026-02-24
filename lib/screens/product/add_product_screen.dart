@@ -4,7 +4,10 @@ import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/models.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/inventory_provider.dart';
+import '../../utils/plan_limits.dart';
+import '../profile/profile_screen.dart';
 
 class AddProductScreen extends StatefulWidget {
   final Product? productToEdit; // If null, we are adding a new product
@@ -94,15 +97,17 @@ class _AddProductScreenState extends State<AddProductScreen> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 final name = newCategoryController.text.trim();
                 if (name.isNotEmpty) {
-                  inventory.addCategory(name);
+                  await inventory.addCategory(name);
                   final newCat = inventory.categories.last;
-                  setState(() {
-                    _selectedCategoryId = newCat.id;
-                  });
-                  Navigator.pop(context);
+                  if (context.mounted) {
+                    setState(() {
+                      _selectedCategoryId = newCat.id;
+                    });
+                    Navigator.pop(context);
+                  }
                 }
               },
               child: const Text('Add'),
@@ -113,7 +118,40 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
-  void _saveProduct(InventoryProvider inventory) {
+  void _showPlanLimitDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Product Limit Reached'),
+        content: Text(
+          'Your Normal plan allows up to ${PlanLimits.normalMaxProducts} products.\n\n'
+          'Upgrade to Pro for unlimited products and more features.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7C3AED),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Upgrade to Pro'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _saveProduct(InventoryProvider inventory) async {
     if (_formKey.currentState!.validate()) {
       if (_selectedCategoryId == null || _selectedWarehouseId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -122,8 +160,20 @@ class _AddProductScreenState extends State<AddProductScreen> {
         return;
       }
 
+      final isEdit = widget.productToEdit != null &&
+          widget.productToEdit!.id.isNotEmpty;
+
+      // Plan limit check — only for new products
+      if (!isEdit) {
+        final auth = Provider.of<AuthProvider>(context, listen: false);
+        if (!PlanLimits.canAddProduct(auth.plan, inventory.products.length)) {
+          _showPlanLimitDialog();
+          return;
+        }
+      }
+
       final product = Product(
-        id: widget.productToEdit?.id ?? 'p${DateTime.now().millisecondsSinceEpoch}',
+        id: isEdit ? widget.productToEdit!.id : null,
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),
         categoryId: _selectedCategoryId!,
@@ -135,19 +185,23 @@ class _AddProductScreenState extends State<AddProductScreen> {
         imageUrl: widget.productToEdit?.imageUrl,
       );
 
-      if (widget.productToEdit == null) {
-        inventory.addProduct(product);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Product added successfully')),
-        );
+      if (isEdit) {
+        await inventory.updateProduct(product);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Product updated successfully')),
+          );
+        }
       } else {
-        inventory.updateProduct(product);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Product updated successfully')),
-        );
+        await inventory.addProduct(product);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Product added successfully')),
+          );
+        }
       }
 
-      Navigator.pop(context);
+      if (mounted) Navigator.pop(context);
     }
   }
 
@@ -443,7 +497,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => _saveProduct(inventory),
+                  onPressed: () async => _saveProduct(inventory),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.primary,
                     foregroundColor: Colors.white,

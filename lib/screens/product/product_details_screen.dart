@@ -52,14 +52,16 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 final newStock = int.tryParse(stockController.text);
                 if (newStock != null) {
-                  inventory.adjustStock(product.id, newStock);
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Stock updated successfully')),
-                  );
+                  await inventory.adjustStock(product.id, newStock);
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Stock updated successfully')),
+                    );
+                  }
                 }
               },
               child: const Text('Save'),
@@ -83,13 +85,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () {
-                inventory.deleteProduct(widget.productId);
-                Navigator.pop(context); // Close dialog
-                Navigator.pop(context); // Go back to list
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Product deleted successfully')),
-                );
+              onPressed: () async {
+                await inventory.deleteProduct(widget.productId);
+                if (context.mounted) {
+                  Navigator.pop(context); // Close dialog
+                  Navigator.pop(context); // Go back to list
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Product deleted successfully')),
+                  );
+                }
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
               child: const Text('Delete'),
