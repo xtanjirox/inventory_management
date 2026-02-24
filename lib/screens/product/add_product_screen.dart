@@ -4,7 +4,10 @@ import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/models.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/inventory_provider.dart';
+import '../../utils/plan_limits.dart';
+import '../profile/profile_screen.dart';
 
 class AddProductScreen extends StatefulWidget {
   final Product? productToEdit; // If null, we are adding a new product
@@ -115,6 +118,39 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
+  void _showPlanLimitDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Product Limit Reached'),
+        content: Text(
+          'Your Normal plan allows up to ${PlanLimits.normalMaxProducts} products.\n\n'
+          'Upgrade to Pro for unlimited products and more features.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7C3AED),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Upgrade to Pro'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _saveProduct(InventoryProvider inventory) async {
     if (_formKey.currentState!.validate()) {
       if (_selectedCategoryId == null || _selectedWarehouseId == null) {
@@ -126,6 +162,15 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
       final isEdit = widget.productToEdit != null &&
           widget.productToEdit!.id.isNotEmpty;
+
+      // Plan limit check — only for new products
+      if (!isEdit) {
+        final auth = Provider.of<AuthProvider>(context, listen: false);
+        if (!PlanLimits.canAddProduct(auth.plan, inventory.products.length)) {
+          _showPlanLimitDialog();
+          return;
+        }
+      }
 
       final product = Product(
         id: isEdit ? widget.productToEdit!.id : null,

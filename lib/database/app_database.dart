@@ -22,7 +22,7 @@ class AppDatabase {
     final path = join(dbPath, 'inventory.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onConfigure: _onConfigure,
@@ -88,12 +88,53 @@ class AppDatabase {
         'CREATE INDEX idx_products_warehouse ON products(warehouse_id)');
     await db.execute(
         'CREATE INDEX idx_products_unsynced ON products(is_synced) WHERE is_synced = 0');
+
+    await db.execute('''
+      CREATE TABLE users (
+        id           TEXT PRIMARY KEY,
+        name         TEXT NOT NULL,
+        email        TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        plan         TEXT NOT NULL DEFAULT 'normal',
+        currency     TEXT NOT NULL DEFAULT 'USD',
+        language     TEXT NOT NULL DEFAULT 'en',
+        avatar_url   TEXT,
+        created_at   INTEGER NOT NULL,
+        updated_at   INTEGER NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE local_settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    ''');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Future migration scripts go here.
-    // Example for v2:
-    // if (oldVersion < 2) { await db.execute('ALTER TABLE products ADD COLUMN ...'); }
+    if (oldVersion < 2) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+          id           TEXT PRIMARY KEY,
+          name         TEXT NOT NULL,
+          email        TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL,
+          plan         TEXT NOT NULL DEFAULT 'normal',
+          currency     TEXT NOT NULL DEFAULT 'USD',
+          language     TEXT NOT NULL DEFAULT 'en',
+          avatar_url   TEXT,
+          created_at   INTEGER NOT NULL,
+          updated_at   INTEGER NOT NULL
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS local_settings (
+          key   TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        )
+      ''');
+    }
   }
 
   Future<void> close() async {

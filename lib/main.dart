@@ -2,14 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
-import 'screens/onboarding/welcome_screen.dart';
+import 'providers/auth_provider.dart';
 import 'providers/inventory_provider.dart';
+import 'screens/auth/login_screen.dart';
+import 'screens/main/main_screen.dart';
+import 'screens/onboarding/welcome_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => InventoryProvider()),
       ],
       child: const InventoryApp(),
@@ -34,7 +38,32 @@ class InventoryApp extends StatelessWidget {
           Theme.of(context).textTheme,
         ),
       ),
-      home: const WelcomeScreen(),
+      home: const _AppRoot(),
     );
+  }
+}
+
+class _AppRoot extends StatelessWidget {
+  const _AppRoot();
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = Provider.of<AuthProvider>(context);
+
+    if (auth.isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (auth.isAuthenticated) {
+      return const MainScreen();
+    }
+
+    if (auth.hasExistingUsers) {
+      return const LoginScreen();
+    }
+
+    return const WelcomeScreen();
   }
 }
