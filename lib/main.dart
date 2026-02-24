@@ -5,7 +5,8 @@ import 'package:provider/provider.dart';
 import 'screens/onboarding/welcome_screen.dart';
 import 'providers/inventory_provider.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(
     MultiProvider(
       providers: [
