@@ -7,14 +7,22 @@ import 'providers/inventory_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main/main_screen.dart';
 import 'screens/onboarding/welcome_screen.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.instance.initialize();
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => InventoryProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, InventoryProvider>(
+          create: (_) => InventoryProvider(),
+          update: (_, auth, inventory) {
+            inventory?.setUserId(auth.currentUser?.id);
+            return inventory!;
+          },
+        ),
       ],
       child: const InventoryApp(),
     ),

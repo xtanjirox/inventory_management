@@ -22,7 +22,7 @@ class AppDatabase {
     final path = join(dbPath, 'inventory.db');
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onConfigure: _onConfigure,
@@ -110,9 +110,38 @@ class AppDatabase {
         value TEXT NOT NULL
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE activities (
+        id              TEXT PRIMARY KEY,
+        type            TEXT NOT NULL,
+        product_id      TEXT NOT NULL,
+        product_name    TEXT NOT NULL,
+        quantity_change INTEGER,
+        note            TEXT,
+        user_id         TEXT NOT NULL,
+        timestamp       INTEGER NOT NULL
+      )
+    ''');
+    await db.execute(
+        'CREATE INDEX idx_activities_timestamp ON activities(timestamp DESC)');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS activities (
+          id              TEXT PRIMARY KEY,
+          type            TEXT NOT NULL,
+          product_id      TEXT NOT NULL,
+          product_name    TEXT NOT NULL,
+          quantity_change INTEGER,
+          note            TEXT,
+          user_id         TEXT NOT NULL,
+          timestamp       INTEGER NOT NULL
+        )
+      ''');
+    }
     if (oldVersion < 2) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS users (

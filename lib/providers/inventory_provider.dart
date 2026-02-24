@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
+import '../models/activity.dart';
 import '../repositories/category_repository.dart';
 import '../repositories/warehouse_repository.dart';
 import '../repositories/product_repository.dart';
+import '../repositories/activity_repository.dart';
 
 class InventoryProvider with ChangeNotifier {
   final CategoryRepository _categoryRepo;
   final WarehouseRepository _warehouseRepo;
   final ProductRepository _productRepo;
+  final ActivityRepository _activityRepo;
 
   List<Category> _categories = [];
   List<Warehouse> _warehouses = [];
   List<Product> _products = [];
+  List<Activity> _recentActivities = [];
 
   bool _isLoading = true;
   String? _error;
@@ -22,14 +26,25 @@ class InventoryProvider with ChangeNotifier {
   List<Category> get categories => [..._categories];
   List<Warehouse> get warehouses => [..._warehouses];
   List<Product> get products => [..._products];
+  List<Activity> get recentActivities => [..._recentActivities];
+  List<Product> get lowStockProducts =>
+      _products.where((p) => p.stock <= p.lowStockThreshold).toList();
+
+  String? _currentUserId;
+
+  void setUserId(String? userId) {
+    _currentUserId = userId;
+  }
 
   InventoryProvider({
     CategoryRepository? categoryRepo,
     WarehouseRepository? warehouseRepo,
     ProductRepository? productRepo,
+    ActivityRepository? activityRepo,
   })  : _categoryRepo = categoryRepo ?? CategoryRepository(),
         _warehouseRepo = warehouseRepo ?? WarehouseRepository(),
-        _productRepo = productRepo ?? ProductRepository() {
+        _productRepo = productRepo ?? ProductRepository(),
+        _activityRepo = activityRepo ?? ActivityRepository() {
     _initialize();
   }
 
@@ -41,6 +56,7 @@ class InventoryProvider with ChangeNotifier {
       _categories = await _categoryRepo.getAll();
       _warehouses = await _warehouseRepo.getAll();
       _products = await _productRepo.getAll();
+      _recentActivities = await _activityRepo.getRecent(limit: 20);
 
       // Seed default data on first launch
       if (_categories.isEmpty) {
@@ -167,6 +183,12 @@ class InventoryProvider with ChangeNotifier {
     _products.insert(0, product);
     notifyListeners();
     await _productRepo.insert(product);
+    await _logActivity(
+      type: ActivityType.productAdded,
+      productId: product.id,
+      productName: product.name,
+      quantityChange: product.stock,
+    );
   }
 
   Future<void> updateProduct(Product product) async {
@@ -179,18 +201,68 @@ class InventoryProvider with ChangeNotifier {
   }
 
   Future<void> deleteProduct(String id) async {
+    final product = _products.firstWhere((p) => p.id == id,
+        orElse: () => Product(
+            name: 'Unknown',
+            categoryId: '',
+            warehouseId: '',
+            sku: '',
+            price: 0,
+            stock: 0,
+            lowStockThreshold: 0));
     _products.removeWhere((p) => p.id == id);
     notifyListeners();
     await _productRepo.delete(id);
+    await _logActivity(
+      type: ActivityType.productDeleted,
+      productId: id,
+      productName: product.name,
+    );
   }
 
-  Future<void> adjustStock(String productId, int newStock) async {
+  Future<void> adjustStock(
+    String productId,
+    int newStock, {
+    ActivityType type = ActivityType.stockAdjustment,
+    String? note,
+  }) async {
     final index = _products.indexWhere((p) => p.id == productId);
     if (index >= 0) {
+      final oldStock = _products[index].stock;
       _products[index] = _products[index].copyWith(stock: newStock);
       notifyListeners();
       await _productRepo.adjustStock(_products[index], newStock);
+      await _logActivity(
+        type: type,
+        productId: productId,
+        productName: _products[index].name,
+        quantityChange: newStock - oldStock,
+        note: note,
+      );
     }
+  }
+
+  Future<void> _logActivity({
+    required ActivityType type,
+    required String productId,
+    required String productName,
+    int? quantityChange,
+    String? note,
+  }) async {
+    final activity = Activity(
+      type: type,
+      productId: productId,
+      productName: productName,
+      userId: _currentUserId ?? 'local',
+      quantityChange: quantityChange,
+      note: note,
+    );
+    await _activityRepo.insert(activity);
+    _recentActivities.insert(0, activity);
+    if (_recentActivities.length > 20) {
+      _recentActivities = _recentActivities.take(20).toList();
+    }
+    notifyListeners();
   }
 
   // ── Refresh (pull latest from DB) ──────────────────────────────────────────
@@ -199,6 +271,7 @@ class InventoryProvider with ChangeNotifier {
     _categories = await _categoryRepo.getAll();
     _warehouses = await _warehouseRepo.getAll();
     _products = await _productRepo.getAll();
+    _recentActivities = await _activityRepo.getRecent(limit: 20);
     notifyListeners();
   }
 }

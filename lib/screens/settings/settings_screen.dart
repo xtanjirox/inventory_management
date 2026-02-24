@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
 import '../profile/profile_screen.dart';
+import 'notification_settings_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -141,6 +142,21 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const ProfileScreen()),
+            ),
+          ),
+          const Divider(),
+
+          // ── Notifications ─────────────────────────────────────────────────
+          _buildSectionHeader('Notifications'),
+          ListTile(
+            leading: const Icon(Icons.notifications_outlined),
+            title: const Text('Notification Settings'),
+            subtitle: const Text('Low stock alerts & inventory recap'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const NotificationSettingsScreen()),
             ),
           ),
           const Divider(),
