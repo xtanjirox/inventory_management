@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/inventory_provider.dart';
+import '../../providers/auth_provider.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -18,6 +19,8 @@ class _StatsScreenState extends State<StatsScreen> {
   @override
   Widget build(BuildContext context) {
     final inventory = Provider.of<InventoryProvider>(context);
+    final user = Provider.of<AuthProvider>(context).currentUser;
+    final currency = user?.currency ?? 'USD';
     final totalValue = inventory.products.fold<double>(0, (sum, p) => sum + (p.price * p.stock));
     final totalItems = inventory.products.fold<int>(0, (sum, p) => sum + p.stock);
 
@@ -92,7 +95,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 Expanded(
                   child: _buildSummaryCard(
                     title: 'Total Value',
-                    value: '\$${totalValue.toStringAsFixed(0)}',
+                    value: '$currency ${totalValue.toStringAsFixed(0)}',
                     trend: '+15%',
                     isPositive: true,
                   ),

@@ -95,6 +95,7 @@ class NotificationService {
     required double totalValue,
     required int lowStockCount,
     required TimeOfDay time,
+    required String currency,
     bool daily = true,
     int? customIntervalHours,
   }) async {
@@ -115,7 +116,7 @@ class NotificationService {
     }
 
     final body = '$totalProducts products · '
-        '\$${totalValue.toStringAsFixed(0)} total value'
+        '$currency ${totalValue.toStringAsFixed(0)} total value'
         '${lowStockCount > 0 ? ' · ⚠️ $lowStockCount low stock' : ''}';
 
     await _plugin.zonedSchedule(

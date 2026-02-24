@@ -445,7 +445,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: InputDecoration(
                         labelText: 'Price',
-                        prefixText: '\$ ',
+                        prefixText: '${Provider.of<AuthProvider>(context, listen: false).currentUser?.currency ?? 'USD'} ',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),

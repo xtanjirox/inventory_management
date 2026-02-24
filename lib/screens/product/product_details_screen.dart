@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:barcode_widget/barcode_widget.dart';
 
+import '../../providers/auth_provider.dart';
 import '../../providers/inventory_provider.dart';
 import 'add_product_screen.dart';
 
@@ -107,6 +108,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final inventory = Provider.of<InventoryProvider>(context);
+    final user = Provider.of<AuthProvider>(context).currentUser;
     final product = inventory.getProductById(widget.productId);
 
     if (product == null) {
@@ -212,7 +214,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   ),
                 ),
                 Text(
-                  '\$${product.price.toStringAsFixed(2)}',
+                  '${user?.currency ?? 'USD'} ${product.price.toStringAsFixed(2)}',
                   style: const TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,

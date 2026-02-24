@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../providers/auth_provider.dart';
+import '../../providers/inventory_provider.dart';
 import 'add_product_screen.dart';
 import 'product_details_screen.dart';
-import '../../providers/inventory_provider.dart';
 
 class ProductListScreen extends StatefulWidget {
   const ProductListScreen({super.key});
@@ -157,12 +158,22 @@ class _ProductListScreenState extends State<ProductListScreen> {
                               ),
                             ],
                           ),
-                          trailing: Text(
-                            '\$${product.price.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
+                          trailing: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '${Provider.of<AuthProvider>(context, listen: false).currentUser?.currency ?? 'USD'} ${product.price.toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              Text(
+                                'Tap to view details',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
                           ),
                           onTap: () {
                             Navigator.push(

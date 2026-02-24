@@ -60,18 +60,22 @@ class _NotificationSettingsScreenState
 
     // Recap notifications (Pro only)
     final auth = Provider.of<AuthProvider>(context, listen: false);
+    final user = auth.currentUser;
+    final currency = user?.currency ?? 'USD';
+    final totalValue = inventory.products
+        .fold<double>(0, (sum, p) => sum + p.price * p.stock);
+
     if (_recapEnabled && auth.isPro) {
-      final totalValue = inventory.products
-          .fold<double>(0, (sum, p) => sum + p.price * p.stock);
-      final customHours = _recapCustomDays * 24;
+      final customDays = _recapCustomDays;
+      
       await ns.scheduleRecap(
         totalProducts: inventory.products.length,
         totalValue: totalValue,
         lowStockCount: inventory.lowStockProducts.length,
         time: _recapTime,
+        currency: currency,
         daily: _recapFreq == 'daily',
-        customIntervalHours:
-            _recapFreq == 'custom' ? customHours : null,
+        customIntervalHours: _recapFreq == 'custom' ? customDays * 24 : null,
       );
     } else {
       await ns.cancelRecapNotification();
