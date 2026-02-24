@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/user_profile.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/plan_limits.dart';
+import '../../widgets/app_dialogs.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -54,144 +55,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) return;
     setState(() => _isEditing = false);
     if (error != null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(error), backgroundColor: Colors.red));
+      AppDialogs.snack(context, error, error: true);
     }
   }
 
   void _showUpgradeDialog(BuildContext context, AuthProvider auth) {
-    showDialog(
+    AppDialogs.showUpgrade(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Upgrade to Pro'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Unlock all features with the Pro plan:',
-              style: TextStyle(fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 16),
-            _featureRow(Icons.inventory_2, 'Unlimited products'),
-            _featureRow(Icons.cloud_sync, 'Cloud synchronization'),
-            _featureRow(Icons.bar_chart, 'Advanced analytics'),
-            _featureRow(Icons.download, 'CSV & PDF export'),
-            _featureRow(Icons.support_agent, 'Priority support'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              await auth.upgradeToPro();
-              if (context.mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('🎉 You are now on the Pro plan!'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF7C3AED),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Upgrade Now'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _featureRow(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: const Color(0xFF7C3AED)),
-          const SizedBox(width: 10),
-          Text(text),
-        ],
-      ),
+      title: 'Upgrade to Pro',
+      subtitle: 'Unlock everything with one upgrade.',
+      features: kProFeatures,
+      confirmLabel: 'Upgrade Now — \$9.99/mo',
+      onConfirm: () async {
+        await auth.upgradeToPro();
+        if (context.mounted) {
+          AppDialogs.snack(context, '🎉 You are now on the Pro plan!', success: true);
+        }
+      },
     );
   }
 
   void _showChangePasswordDialog(BuildContext context, AuthProvider auth) {
-    final currentCtrl = TextEditingController();
-    final newCtrl = TextEditingController();
-    final confirmCtrl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    showDialog(
+    AppDialogs.changePassword(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Change Password'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: currentCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Current Password'),
-                validator: (v) =>
-                    (v == null || v.isEmpty) ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: newCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'New Password'),
-                validator: (v) =>
-                    (v == null || v.length < 6) ? 'Min 6 characters' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: confirmCtrl,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Confirm Password'),
-                validator: (v) =>
-                    v != newCtrl.text ? 'Passwords do not match' : null,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-              final error = await auth.changePassword(
-                currentPassword: currentCtrl.text,
-                newPassword: newCtrl.text,
-              );
-              if (context.mounted) {
-                Navigator.pop(context);
-                if (error != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(error), backgroundColor: Colors.red),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Password changed successfully')),
-                  );
-                }
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+      onSave: auth.changePassword,
+      onResult: (error) {
+        if (!mounted) return;
+        if (error != null) {
+          AppDialogs.snack(context, error, error: true);
+        } else {
+          AppDialogs.snack(context, 'Password changed successfully', success: true);
+        }
+      },
     );
   }
 

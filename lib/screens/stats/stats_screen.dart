@@ -21,88 +21,90 @@ class _StatsScreenState extends State<StatsScreen> {
     final inventory = Provider.of<InventoryProvider>(context);
     final user = Provider.of<AuthProvider>(context).currentUser;
     final currency = user?.currency ?? 'USD';
+    final primary = Theme.of(context).colorScheme.primary;
     final totalValue = inventory.products.fold<double>(0, (sum, p) => sum + (p.price * p.stock));
     final totalItems = inventory.products.fold<int>(0, (sum, p) => sum + p.stock);
 
+    final lowStockCount = inventory.lowStockProducts.length;
+    final sortedProducts = List.of(inventory.products)
+      ..sort((a, b) => (b.price * b.stock).compareTo(a.price * a.stock));
+    final top5 = sortedProducts.take(5).toList();
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Stats & Analytics',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('Analytics'),
         actions: [
           IconButton(
             icon: const Icon(Icons.file_download_outlined),
             onPressed: () {},
+            tooltip: 'Export',
           ),
-          const SizedBox(width: 8),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Period selector ───────────────────────────────────────────
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Overview',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                const Text('Overview',
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold,
+                        color: Color(0xFF0D1B3E))),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
+                    border: const Border.fromBorderSide(
+                        BorderSide(color: Color(0xFFE2E8F0))),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: _selectedPeriod,
                       isDense: true,
-                      icon: Icon(
-                        Icons.keyboard_arrow_down,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
+                      icon: Icon(Icons.keyboard_arrow_down_rounded,
+                          color: primary, size: 18),
                       style: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      items: _periods.map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
-                      onChanged: (newValue) {
-                        if (newValue != null) {
-                          setState(() {
-                            _selectedPeriod = newValue;
-                          });
-                        }
+                          color: primary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13),
+                      items: _periods
+                          .map((v) => DropdownMenuItem(
+                              value: v, child: Text(v)))
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) setState(() => _selectedPeriod = v);
                       },
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+
+            // ── KPI cards row ─────────────────────────────────────────────
             Row(
               children: [
                 Expanded(
-                  child: _buildSummaryCard(
+                  child: _KpiCard(
+                    icon: Icons.attach_money_rounded,
+                    iconColor: Colors.green,
                     title: 'Total Value',
                     value: '$currency ${totalValue.toStringAsFixed(0)}',
                     trend: '+15%',
                     isPositive: true,
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: _buildSummaryCard(
+                  child: _KpiCard(
+                    icon: Icons.inventory_2_outlined,
+                    iconColor: primary,
                     title: 'Total Items',
                     value: totalItems.toString(),
                     trend: '+8%',
@@ -111,182 +113,198 @@ class _StatsScreenState extends State<StatsScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 32),
-            const Text(
-              'Stock Value Trend',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _KpiCard(
+                    icon: Icons.warning_amber_rounded,
+                    iconColor: Colors.orange,
+                    title: 'Low Stock',
+                    value: lowStockCount.toString(),
+                    trend: lowStockCount > 0 ? 'Needs attention' : 'All good',
+                    isPositive: lowStockCount == 0,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _KpiCard(
+                    icon: Icons.category_outlined,
+                    iconColor: const Color(0xFF7C3AED),
+                    title: 'Categories',
+                    value: inventory.categories.length.toString(),
+                    trend: 'Active',
+                    isPositive: true,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 250,
-              child: BarChart(
-                BarChartData(
-                  alignment: BarChartAlignment.spaceAround,
-                  maxY: 100,
-                  barTouchData: BarTouchData(enabled: false),
-                  titlesData: FlTitlesData(
-                    show: true,
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        getTitlesWidget: (value, meta) {
-                          const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 8.0),
-                            child: Text(
-                              days[value.toInt() % days.length],
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 12,
-                              ),
+            const SizedBox(height: 24),
+
+            // ── Chart ─────────────────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2))
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Stock Value Trend',
+                      style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0D1B3E))),
+                  const SizedBox(height: 4),
+                  Text('Weekly overview',
+                      style:
+                          TextStyle(fontSize: 12, color: Colors.grey[500])),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    height: 180,
+                    child: BarChart(
+                      BarChartData(
+                        alignment: BarChartAlignment.spaceAround,
+                        maxY: 100,
+                        barTouchData: BarTouchData(enabled: false),
+                        titlesData: FlTitlesData(
+                          show: true,
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              getTitlesWidget: (value, meta) {
+                                const days = [
+                                  'Mon', 'Tue', 'Wed', 'Thu',
+                                  'Fri', 'Sat', 'Sun'
+                                ];
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: Text(
+                                    days[value.toInt() % days.length],
+                                    style: const TextStyle(
+                                        color: Color(0xFF94A3B8),
+                                        fontSize: 11),
+                                  ),
+                                );
+                              },
                             ),
-                          );
-                        },
+                          ),
+                          leftTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false)),
+                          topTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false)),
+                        ),
+                        gridData: FlGridData(
+                          show: true,
+                          drawVerticalLine: false,
+                          horizontalInterval: 25,
+                          getDrawingHorizontalLine: (_) => FlLine(
+                            color: const Color(0xFFF1F5F9),
+                            strokeWidth: 1,
+                          ),
+                        ),
+                        borderData: FlBorderData(show: false),
+                        barGroups: [
+                          _buildBarGroup(0, 45),
+                          _buildBarGroup(1, 60),
+                          _buildBarGroup(2, 85),
+                          _buildBarGroup(3, 50),
+                          _buildBarGroup(4, 70),
+                          _buildBarGroup(5, 95),
+                          _buildBarGroup(6, 65),
+                        ],
                       ),
-                    ),
-                    leftTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
                     ),
                   ),
-                  gridData: const FlGridData(show: false),
-                  borderData: FlBorderData(show: false),
-                  barGroups: [
-                    _buildBarGroup(0, 45),
-                    _buildBarGroup(1, 60),
-                    _buildBarGroup(2, 85),
-                    _buildBarGroup(3, 50),
-                    _buildBarGroup(4, 70),
-                    _buildBarGroup(5, 95),
-                    _buildBarGroup(6, 65),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // ── Top products ──────────────────────────────────────────────
+            const Text('Top Products by Value',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0D1B3E))),
+            const SizedBox(height: 12),
+            if (inventory.products.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Text('No products yet',
+                      style: TextStyle(color: Colors.grey[500])),
+                ),
+              )
+            else
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2))
                   ],
                 ),
-              ),
-            ),
-            const SizedBox(height: 32),
-            const Text(
-              'Highest Value Products',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (inventory.products.isEmpty)
-              const Center(child: Text('No products available.'))
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: inventory.products.length > 5 ? 5 : inventory.products.length,
-                itemBuilder: (context, index) {
-                  // Sort products by value (price * stock) descending
-                  final sortedProducts = List.of(inventory.products)
-                    ..sort((a, b) => (b.price * b.stock).compareTo(a.price * a.stock));
-                  final product = sortedProducts[index];
-
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[200],
-                        borderRadius: BorderRadius.circular(8),
-                        image: product.imageUrl != null
-                            ? DecorationImage(
-                                image: NetworkImage(product.imageUrl!),
-                                fit: BoxFit.cover,
-                              )
-                            : null,
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: top5.length,
+                  separatorBuilder: (_, __) => const Divider(
+                      height: 1, indent: 68, color: Color(0xFFF1F5F9)),
+                  itemBuilder: (context, index) {
+                    final product = top5[index];
+                    final value = product.price * product.stock;
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 4),
+                      leading: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: product.imageUrl == null
+                            ? Icon(Icons.inventory_2_outlined,
+                                color: primary.withValues(alpha: 0.6),
+                                size: 20)
+                            : ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.network(product.imageUrl!,
+                                    fit: BoxFit.cover),
+                              ),
                       ),
-                      child: product.imageUrl == null ? const Icon(Icons.inventory_2, color: Colors.grey) : null,
-                    ),
-                    title: Text(
-                      product.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text('${product.stock} units'),
-                    trailing: Text(
-                      '\$${(product.price * product.stock).toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                      title: Text(product.name,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 14)),
+                      subtitle: Text('${product.stock} units',
+                          style: TextStyle(
+                              color: Colors.grey[500], fontSize: 12)),
+                      trailing: Text(
+                        '$currency ${value.toStringAsFixed(2)}',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: primary),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryCard({
-    required String title,
-    required String value,
-    required String trend,
-    required bool isPositive,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(
-                isPositive ? Icons.arrow_upward : Icons.arrow_downward,
-                color: isPositive ? Colors.green : Colors.red,
-                size: 16,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                trend,
-                style: TextStyle(
-                  color: isPositive ? Colors.green : Colors.red,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -297,14 +315,101 @@ class _StatsScreenState extends State<StatsScreen> {
       barRods: [
         BarChartRodData(
           toY: y,
-          color: Theme.of(context).colorScheme.primary,
-          width: 16,
+          gradient: LinearGradient(
+            colors: [
+              Theme.of(context).colorScheme.primary,
+              Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+          width: 18,
           borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(4),
-            topRight: Radius.circular(4),
+            topLeft: Radius.circular(6),
+            topRight: Radius.circular(6),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _KpiCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String value;
+  final String trend;
+  final bool isPositive;
+
+  const _KpiCard({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.value,
+    required this.trend,
+    required this.isPositive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: iconColor, size: 18),
+          ),
+          const SizedBox(height: 12),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0D1B3E))),
+          const SizedBox(height: 2),
+          Text(title,
+              style:
+                  TextStyle(fontSize: 12, color: Colors.grey[500])),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(
+                isPositive
+                    ? Icons.trending_up_rounded
+                    : Icons.trending_down_rounded,
+                size: 12,
+                color: isPositive ? Colors.green[600] : Colors.orange[700],
+              ),
+              const SizedBox(width: 3),
+              Text(
+                trend,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: isPositive ? Colors.green[600] : Colors.orange[700],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

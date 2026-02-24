@@ -7,7 +7,8 @@ import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/inventory_provider.dart';
 import '../../utils/plan_limits.dart';
-import '../profile/profile_screen.dart';
+import '../../widgets/app_dialogs.dart';
+import '../payment/plan_selection_screen.dart';
 
 class AddProductScreen extends StatefulWidget {
   final Product? productToEdit; // If null, we are adding a new product
@@ -75,78 +76,34 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   void _showAddCategoryDialog(BuildContext context, InventoryProvider inventory) {
-    final TextEditingController newCategoryController = TextEditingController();
-
-    showDialog(
+    AppDialogs.input(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Add New Category'),
-          content: TextField(
-            controller: newCategoryController,
-            decoration: InputDecoration(
-              labelText: 'Category Name',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final name = newCategoryController.text.trim();
-                if (name.isNotEmpty) {
-                  await inventory.addCategory(name);
-                  final newCat = inventory.categories.last;
-                  if (context.mounted) {
-                    setState(() {
-                      _selectedCategoryId = newCat.id;
-                    });
-                    Navigator.pop(context);
-                  }
-                }
-              },
-              child: const Text('Add'),
-            ),
-          ],
-        );
+      icon: Icons.category_outlined,
+      iconColor: const Color(0xFF1152D4),
+      title: 'New Category',
+      message: 'Give your category a clear, descriptive name.',
+      fieldLabel: 'Category Name',
+      confirmLabel: 'Create',
+      onConfirm: (name) async {
+        await inventory.addCategory(name);
+        final newCat = inventory.categories.last;
+        if (mounted) {
+          setState(() => _selectedCategoryId = newCat.id);
+        }
       },
     );
   }
 
   void _showPlanLimitDialog() {
-    showDialog(
+    AppDialogs.showUpgrade(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Product Limit Reached'),
-        content: Text(
-          'Your Normal plan allows up to ${PlanLimits.normalMaxProducts} products.\n\n'
-          'Upgrade to Pro for unlimited products and more features.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ProfileScreen()),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF7C3AED),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Upgrade to Pro'),
-          ),
-        ],
+      title: 'Product Limit Reached',
+      subtitle: 'You have reached the ${PlanLimits.normalMaxProducts}-product limit on the Free plan.',
+      features: kProFeatures,
+      confirmLabel: 'Upgrade to Pro',
+      onConfirm: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const PlanSelectionScreen()),
       ),
     );
   }
@@ -154,9 +111,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Future<void> _saveProduct(InventoryProvider inventory) async {
     if (_formKey.currentState!.validate()) {
       if (_selectedCategoryId == null || _selectedWarehouseId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please select a category and a warehouse')),
-        );
+        AppDialogs.snack(context, 'Please select a category and a warehouse', error: true);
         return;
       }
 
@@ -187,18 +142,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
       if (isEdit) {
         await inventory.updateProduct(product);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Product updated successfully')),
-          );
-        }
+        if (mounted) AppDialogs.snack(context, 'Product updated successfully', success: true);
       } else {
         await inventory.addProduct(product);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Product added successfully')),
-          );
-        }
+        if (mounted) AppDialogs.snack(context, 'Product added successfully', success: true);
       }
 
       if (mounted) Navigator.pop(context);

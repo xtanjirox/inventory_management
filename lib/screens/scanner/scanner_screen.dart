@@ -4,6 +4,7 @@ import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/inventory_provider.dart';
+import '../../widgets/app_dialogs.dart';
 import '../product/product_details_screen.dart';
 import '../product/add_product_screen.dart';
 import '../../models/models.dart';
@@ -56,45 +57,33 @@ class _ScannerScreenState extends State<ScannerScreen> {
   }
 
   void _showUnknownBarcodeDialog(BuildContext context, String barcode) {
-    showDialog(
+    AppDialogs.show(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Product Not Found'),
-          content: Text('No product found with barcode:\n$barcode\n\nWould you like to add it?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context); // Close dialog
-                // Go to Add Product screen with pre-filled SKU
-                final dummyProduct = Product(
-                  id: '',
-                  name: '',
-                  description: '',
-                  categoryId: '',
-                  warehouseId: '',
-                  sku: barcode,
-                  price: 0,
-                  stock: 0,
-                  lowStockThreshold: 10,
-                );
-                
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => AddProductScreen(productToEdit: dummyProduct),
-                  ),
-                );
-              },
-              child: const Text('Add Product'),
-            ),
-          ],
+      icon: Icons.qr_code_2_outlined,
+      iconColor: const Color(0xFF1152D4),
+      title: 'Product Not Found',
+      message: 'No product matches barcode\n"$barcode"\n\nWould you like to add it to your inventory?',
+      confirmLabel: 'Add Product',
+      onConfirm: () {
+        final dummyProduct = Product(
+          id: '',
+          name: '',
+          description: '',
+          categoryId: '',
+          warehouseId: '',
+          sku: barcode,
+          price: 0,
+          stock: 0,
+          lowStockThreshold: 10,
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => AddProductScreen(productToEdit: dummyProduct),
+          ),
         );
       },
+      cancelLabel: 'Dismiss',
     );
   }
 

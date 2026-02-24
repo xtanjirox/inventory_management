@@ -4,6 +4,7 @@ import 'package:barcode_widget/barcode_widget.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../providers/inventory_provider.dart';
+import '../../widgets/app_dialogs.dart';
 import 'add_product_screen.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
@@ -23,84 +24,39 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     final product = inventory.getProductById(widget.productId);
     if (product == null) return;
 
-    final TextEditingController stockController = TextEditingController(text: product.stock.toString());
-
-    showDialog(
+    AppDialogs.input(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Adjust Stock'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Enter the new stock quantity for this product:'),
-              const SizedBox(height: 16),
-              TextField(
-                controller: stockController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Stock Quantity',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final newStock = int.tryParse(stockController.text);
-                if (newStock != null) {
-                  await inventory.adjustStock(product.id, newStock);
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Stock updated successfully')),
-                    );
-                  }
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
+      icon: Icons.inventory_2_outlined,
+      iconColor: const Color(0xFF1152D4),
+      title: 'Adjust Stock',
+      message: 'Enter the new stock quantity for ${product.name}.',
+      fieldLabel: 'Stock Quantity',
+      initialValue: product.stock.toString(),
+      keyboardType: TextInputType.number,
+      confirmLabel: 'Update Stock',
+      onConfirm: (value) async {
+        final newStock = int.tryParse(value);
+        if (newStock != null && context.mounted) {
+          await inventory.adjustStock(product.id, newStock);
+          if (context.mounted) {
+            AppDialogs.snack(context, 'Stock updated successfully', success: true);
+          }
+        }
       },
     );
   }
 
   void _confirmDelete(BuildContext context, InventoryProvider inventory) {
-    showDialog(
+    AppDialogs.confirmDelete(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Delete Product'),
-          content: const Text('Are you sure you want to delete this product? This action cannot be undone.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                await inventory.deleteProduct(widget.productId);
-                if (context.mounted) {
-                  Navigator.pop(context); // Close dialog
-                  Navigator.pop(context); // Go back to list
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Product deleted successfully')),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
+      title: 'Delete Product',
+      message: 'This product will be permanently removed from your inventory. This action cannot be undone.',
+      onConfirm: () async {
+        await inventory.deleteProduct(widget.productId);
+        if (context.mounted) {
+          Navigator.pop(context);
+          AppDialogs.snack(context, 'Product deleted', success: true);
+        }
       },
     );
   }
