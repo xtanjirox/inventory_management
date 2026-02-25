@@ -13,6 +13,7 @@ class NotificationService {
 
   static const int _lowStockId = 100;
   static const int _recapId = 200;
+  static const int _reminderId = 300;
   static const String _channelId = 'inventory_alerts';
   static const String _channelName = 'Inventory Alerts';
 
@@ -142,6 +143,49 @@ class NotificationService {
 
   Future<void> cancelRecapNotification() async {
     await _plugin.cancel(_recapId);
+  }
+
+  // ── Stock reminder notification ────────────────────────────────────────────
+
+  Future<void> scheduleReminder({required TimeOfDay time}) async {
+    await _plugin.cancel(_reminderId);
+
+    final now = tz.TZDateTime.now(tz.local);
+    var scheduledDate = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      time.hour,
+      time.minute,
+    );
+    if (scheduledDate.isBefore(now)) {
+      scheduledDate = scheduledDate.add(const Duration(hours: 24));
+    }
+
+    await _plugin.zonedSchedule(
+      _reminderId,
+      '📋 Stock Review Reminder',
+      'Time to check and adjust your inventory stock levels.',
+      scheduledDate,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId,
+          _channelName,
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+        ),
+        iOS: const DarwinNotificationDetails(),
+      ),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.time,
+    );
+  }
+
+  Future<void> cancelReminder() async {
+    await _plugin.cancel(_reminderId);
   }
 
   Future<void> cancelAll() async {

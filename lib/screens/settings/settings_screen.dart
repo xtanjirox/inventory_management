@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../profile/profile_screen.dart';
 import 'notification_settings_screen.dart';
 
@@ -11,6 +12,7 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
     final user = auth.currentUser;
     final isPro = auth.isPro;
     final primary = Theme.of(context).colorScheme.primary;
@@ -135,6 +137,8 @@ class SettingsScreen extends StatelessWidget {
               onTap: () => Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const ProfileScreen())),
             ),
+            const _SettingsDivider(),
+            _DarkModeTile(themeProvider: themeProvider),
           ]),
           const SizedBox(height: 20),
 
@@ -435,6 +439,44 @@ class _PlanChip extends StatelessWidget {
           fontWeight: FontWeight.bold,
           color: isPro ? Colors.white : Colors.grey[600],
         ),
+      ),
+    );
+  }
+}
+
+class _DarkModeTile extends StatelessWidget {
+  final ThemeProvider themeProvider;
+  const _DarkModeTile({required this.themeProvider});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = themeProvider.isDark;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFF6366F1).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.dark_mode_outlined,
+                color: Color(0xFF6366F1), size: 18),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text('Dark Mode',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+          ),
+          Switch.adaptive(
+            value: isDark,
+            activeColor: const Color(0xFF1152D4),
+            onChanged: (v) => themeProvider.setTheme(
+                v ? ThemeMode.dark : ThemeMode.light),
+          ),
+        ],
       ),
     );
   }

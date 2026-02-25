@@ -96,4 +96,16 @@ class UserRepository {
     final db = await _db.database;
     await _dao.deleteSetting(db, _sessionKey);
   }
+
+  // ── Generic app settings (key-value) ──────────────────────────────────────
+
+  Future<String?> getSetting(String key) async {
+    final db = await _db.database;
+    return _dao.getSetting(db, key);
+  }
+
+  Future<void> setSetting(String key, String value) async {
+    final db = await _db.database;
+    await _dao.setSetting(db, key, value);
+  }
 }

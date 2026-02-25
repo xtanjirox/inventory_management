@@ -156,4 +156,10 @@ class AuthProvider with ChangeNotifier {
       return 'Upgrade failed: $e';
     }
   }
+
+  // ── App settings persistence ───────────────────────────────────────────────
+
+  Future<String?> getSetting(String key) => _repo.getSetting(key);
+  Future<void> setSetting(String key, String value) =>
+      _repo.setSetting(key, value);
 }

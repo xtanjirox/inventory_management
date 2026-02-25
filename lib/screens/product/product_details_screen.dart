@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:barcode_widget/barcode_widget.dart';
 
+import '../../models/activity.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/inventory_provider.dart';
 import '../../widgets/app_dialogs.dart';
@@ -24,25 +25,22 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     final product = inventory.getProductById(widget.productId);
     if (product == null) return;
 
-    AppDialogs.input(
+    showModalBottomSheet(
       context: context,
-      icon: Icons.inventory_2_outlined,
-      iconColor: const Color(0xFF1152D4),
-      title: 'Adjust Stock',
-      message: 'Enter the new stock quantity for ${product.name}.',
-      fieldLabel: 'Stock Quantity',
-      initialValue: product.stock.toString(),
-      keyboardType: TextInputType.number,
-      confirmLabel: 'Update Stock',
-      onConfirm: (value) async {
-        final newStock = int.tryParse(value);
-        if (newStock != null && context.mounted) {
-          await inventory.adjustStock(product.id, newStock);
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _StockOperationSheet(
+        product: product,
+        onConfirm: (type, delta, note) async {
+          final newStock = (product.stock + delta).clamp(0, 999999).toInt();
+          await inventory.adjustStock(product.id, newStock,
+              type: type, note: note);
           if (context.mounted) {
-            AppDialogs.snack(context, 'Stock updated successfully', success: true);
+            AppDialogs.snack(context, 'Stock updated → $newStock units',
+                success: true);
           }
-        }
-      },
+        },
+      ),
     );
   }
 
@@ -364,4 +362,250 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       ),
     );
   }
+}
+
+// ── Stock Operation Bottom Sheet ───────────────────────────────────────────────
+
+typedef _OpCallback = Future<void> Function(
+    ActivityType type, int delta, String? note);
+
+class _StockOperationSheet extends StatefulWidget {
+  final dynamic product;
+  final _OpCallback onConfirm;
+  const _StockOperationSheet(
+      {required this.product, required this.onConfirm});
+
+  @override
+  State<_StockOperationSheet> createState() => _StockOperationSheetState();
+}
+
+class _StockOperationSheetState extends State<_StockOperationSheet> {
+  static const _ops = [
+    _Op(ActivityType.restock, 'Restock', Icons.add_circle_outline_rounded,
+        Color(0xFF16A34A), true),
+    _Op(ActivityType.sale, 'Sale', Icons.shopping_cart_outlined,
+        Color(0xFF2563EB), false),
+    _Op(ActivityType.returnToStock, 'Return', Icons.undo_rounded,
+        Color(0xFFD97706), true),
+    _Op(ActivityType.damagedArticle, 'Damage', Icons.warning_amber_rounded,
+        Color(0xFFDC2626), false),
+    _Op(ActivityType.stockAdjustment, 'Adjustment', Icons.tune_rounded,
+        Color(0xFF6B7280), true),
+  ];
+
+  int _selectedOp = 0;
+  final _amountCtrl = TextEditingController();
+  final _noteCtrl = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    _noteCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final op = _ops[_selectedOp];
+    final currentStock = widget.product.stock as int;
+    final amount = int.tryParse(_amountCtrl.text) ?? 0;
+    final delta = op.isAddition ? amount : -amount;
+    final preview = (currentStock + delta).clamp(0, 999999);
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          top: 16,
+          left: 24,
+          right: 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text('Adjust Stock',
+              style:
+                  TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text('Current: $currentStock units',
+              style:
+                  TextStyle(fontSize: 13, color: Colors.grey[500])),
+          const SizedBox(height: 16),
+
+          // Operation type chips
+          SizedBox(
+            height: 44,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemCount: _ops.length,
+              itemBuilder: (_, i) {
+                final o = _ops[i];
+                final sel = i == _selectedOp;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedOp = i),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: sel
+                          ? o.color.withValues(alpha: 0.12)
+                          : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: sel ? o.color : Colors.transparent,
+                          width: 1.5),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(o.icon,
+                            size: 16,
+                            color:
+                                sel ? o.color : Colors.grey[500]),
+                        const SizedBox(width: 6),
+                        Text(o.label,
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: sel
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                                color: sel
+                                    ? o.color
+                                    : Colors.grey[600])),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Amount field
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: op.color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                    op.isAddition
+                        ? Icons.add_rounded
+                        : Icons.remove_rounded,
+                    color: op.color,
+                    size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _amountCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: op.label == 'Adjustment'
+                        ? 'New total quantity'
+                        : 'Quantity',
+                    hintText: '0',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Note field
+          TextField(
+            controller: _noteCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Note (optional)',
+              hintText: 'e.g. Supplier delivery #1234',
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Preview
+          if (_amountCtrl.text.isNotEmpty)
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: op.color.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded,
+                      size: 16, color: op.color),
+                  const SizedBox(width: 8),
+                  Text(
+                    'New stock: $currentStock '
+                    '${op.isAddition ? '+' : '-'} $amount = $preview units',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: op.color,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 16),
+
+          // Confirm button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _saving
+                  ? null
+                  : () async {
+                      final raw = int.tryParse(_amountCtrl.text);
+                      if (raw == null || raw <= 0) return;
+                      setState(() => _saving = true);
+                      final d = op.label == 'Adjustment'
+                          ? raw - currentStock
+                          : (op.isAddition ? raw : -raw);
+                      await widget.onConfirm(
+                          op.type, d, _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim());
+                      if (mounted) Navigator.pop(context);
+                    },
+              child: _saving
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : Text('Apply ${op.label}'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Op {
+  final ActivityType type;
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool isAddition;
+  const _Op(this.type, this.label, this.icon, this.color, this.isAddition);
 }

@@ -17,32 +17,90 @@ class NotificationSettingsScreen extends StatefulWidget {
 class _NotificationSettingsScreenState
     extends State<NotificationSettingsScreen> {
   bool _lowStockEnabled = true;
-  String _lowStockFreq = 'daily'; // 'daily', 'weekly', 'custom'
+  String _lowStockFreq = 'daily';
   int _lowStockCustomHours = 12;
 
   bool _recapEnabled = false;
-  String _recapFreq = 'daily'; // 'daily', 'weekly', 'custom'
+  String _recapFreq = 'daily';
   int _recapCustomDays = 1;
   TimeOfDay _recapTime = const TimeOfDay(hour: 9, minute: 0);
 
+  bool _reminderEnabled = false;
+  TimeOfDay _reminderTime = const TimeOfDay(hour: 8, minute: 0);
+
   bool _permissionGranted = false;
+  bool _loading = true;
+
+  Future<void> _requestPermission() => _initAsync();
 
   @override
   void initState() {
     super.initState();
-    _requestPermission();
+    _initAsync();
   }
 
-  Future<void> _requestPermission() async {
+  Future<void> _initAsync() async {
     final granted = await NotificationService.instance.requestPermission();
-    if (mounted) setState(() => _permissionGranted = granted);
+    await _loadSettings();
+    if (mounted) setState(() { _permissionGranted = granted; _loading = false; });
+  }
+
+  Future<void> _loadSettings() async {
+    final auth = context.read<AuthProvider>();
+    final ls = (String k, String d) async =>
+        await auth.getSetting(k) ?? d;
+
+    final lowEnabled = await ls('notif_low_stock_enabled', 'true');
+    final lowFreq = await ls('notif_low_stock_freq', 'daily');
+    final lowHours = await ls('notif_low_stock_custom_hours', '12');
+    final recapEnabled = await ls('notif_recap_enabled', 'false');
+    final recapFreq = await ls('notif_recap_freq', 'daily');
+    final recapDays = await ls('notif_recap_custom_days', '1');
+    final recapHour = await ls('notif_recap_time_hour', '9');
+    final recapMin = await ls('notif_recap_time_minute', '0');
+    final remEnabled = await ls('notif_reminder_enabled', 'false');
+    final remHour = await ls('notif_reminder_time_hour', '8');
+    final remMin = await ls('notif_reminder_time_minute', '0');
+
+    if (mounted) {
+      setState(() {
+        _lowStockEnabled = lowEnabled == 'true';
+        _lowStockFreq = lowFreq;
+        _lowStockCustomHours = int.tryParse(lowHours) ?? 12;
+        _recapEnabled = recapEnabled == 'true';
+        _recapFreq = recapFreq;
+        _recapCustomDays = int.tryParse(recapDays) ?? 1;
+        _recapTime = TimeOfDay(
+            hour: int.tryParse(recapHour) ?? 9,
+            minute: int.tryParse(recapMin) ?? 0);
+        _reminderEnabled = remEnabled == 'true';
+        _reminderTime = TimeOfDay(
+            hour: int.tryParse(remHour) ?? 8,
+            minute: int.tryParse(remMin) ?? 0);
+      });
+    }
+  }
+
+  Future<void> _saveSettings() async {
+    final auth = context.read<AuthProvider>();
+    await auth.setSetting('notif_low_stock_enabled', _lowStockEnabled.toString());
+    await auth.setSetting('notif_low_stock_freq', _lowStockFreq);
+    await auth.setSetting('notif_low_stock_custom_hours', _lowStockCustomHours.toString());
+    await auth.setSetting('notif_recap_enabled', _recapEnabled.toString());
+    await auth.setSetting('notif_recap_freq', _recapFreq);
+    await auth.setSetting('notif_recap_custom_days', _recapCustomDays.toString());
+    await auth.setSetting('notif_recap_time_hour', _recapTime.hour.toString());
+    await auth.setSetting('notif_recap_time_minute', _recapTime.minute.toString());
+    await auth.setSetting('notif_reminder_enabled', _reminderEnabled.toString());
+    await auth.setSetting('notif_reminder_time_hour', _reminderTime.hour.toString());
+    await auth.setSetting('notif_reminder_time_minute', _reminderTime.minute.toString());
   }
 
   Future<void> _applySettings(BuildContext context) async {
     final inventory = Provider.of<InventoryProvider>(context, listen: false);
+    final auth = Provider.of<AuthProvider>(context, listen: false);
     final ns = NotificationService.instance;
 
-    // Low stock notifications
     if (_lowStockEnabled) {
       final hours = _lowStockFreq == 'daily'
           ? 24
@@ -58,16 +116,12 @@ class _NotificationSettingsScreenState
       await ns.cancelLowStockNotification();
     }
 
-    // Recap notifications (Pro only)
-    final auth = Provider.of<AuthProvider>(context, listen: false);
     final user = auth.currentUser;
     final currency = user?.currency ?? 'USD';
-    final totalValue = inventory.products
-        .fold<double>(0, (sum, p) => sum + p.price * p.stock);
+    final totalValue =
+        inventory.products.fold<double>(0, (s, p) => s + p.price * p.stock);
 
     if (_recapEnabled && auth.isPro) {
-      final customDays = _recapCustomDays;
-      
       await ns.scheduleRecap(
         totalProducts: inventory.products.length,
         totalValue: totalValue,
@@ -75,11 +129,20 @@ class _NotificationSettingsScreenState
         time: _recapTime,
         currency: currency,
         daily: _recapFreq == 'daily',
-        customIntervalHours: _recapFreq == 'custom' ? customDays * 24 : null,
+        customIntervalHours:
+            _recapFreq == 'custom' ? _recapCustomDays * 24 : null,
       );
     } else {
       await ns.cancelRecapNotification();
     }
+
+    if (_reminderEnabled) {
+      await ns.scheduleReminder(time: _reminderTime);
+    } else {
+      await ns.cancelReminder();
+    }
+
+    await _saveSettings();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -105,7 +168,9 @@ class _NotificationSettingsScreenState
           ),
         ],
       ),
-      body: ListView(
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
         children: [
           if (!_permissionGranted)
             _PermissionBanner(onGrant: _requestPermission),
@@ -270,6 +335,40 @@ class _NotificationSettingsScreenState
                 ),
             ],
           ],
+          const Divider(),
+
+          // ── Stock Reminder ─────────────────────────────────────────────────
+          _sectionHeader('Daily Reminder'),
+          SwitchListTile(
+            title: const Text('Stock review reminder'),
+            subtitle: const Text('Daily reminder to check and adjust stock'),
+            secondary: const Icon(Icons.alarm_outlined),
+            value: _reminderEnabled,
+            onChanged: (v) => setState(() => _reminderEnabled = v),
+          ),
+          if (_reminderEnabled)
+            ListTile(
+              leading: const Icon(Icons.access_time),
+              title: const Text('Reminder time'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_reminderTime.format(context),
+                      style: TextStyle(color: primary)),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+              onTap: () async {
+                final picked = await showTimePicker(
+                  context: context,
+                  initialTime: _reminderTime,
+                );
+                if (picked != null) {
+                  setState(() => _reminderTime = picked);
+                }
+              },
+            ),
+
           const SizedBox(height: 32),
         ],
       ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/inventory_provider.dart';
+import '../../widgets/ad_banner_widget.dart';
 import 'dashboard_screen.dart';
 import '../product/product_list_screen.dart';
 import '../scanner/scanner_screen.dart';
@@ -87,9 +88,15 @@ class _MainScreenState extends State<MainScreen> {
 
     return Scaffold(
       body: _screens[_currentIndex],
-      bottomNavigationBar: _AppNavBar(
-        currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const AdBannerWidget(),
+          _AppNavBar(
+            currentIndex: _currentIndex,
+            onTap: (i) => setState(() => _currentIndex = i),
+          ),
+        ],
       ),
     );
   }
