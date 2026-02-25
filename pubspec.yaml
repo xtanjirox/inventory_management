@@ -46,7 +46,15 @@ dependencies:
   crypto: ^3.0.6
   flutter_local_notifications: ^17.2.4
   timezone: ^0.9.4
+  flutter_timezone: ^3.0.0
   mobile_scanner: ^7.2.0
+  image_picker: ^1.1.2
+  path_provider: ^2.1.5
+  pdf: ^3.11.3
+  printing: ^5.13.2
+  share_plus: ^10.1.4
+  file_picker: ^8.1.4
+  csv: ^6.0.0
 
 dev_dependencies:
   flutter_test:

@@ -44,7 +44,11 @@
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>This app needs access to the camera to scan product barcodes.</string>
+	<string>This app needs access to the camera to scan product barcodes and take product photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs access to your photo library to select product images.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>This app needs permission to save photos to your library.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

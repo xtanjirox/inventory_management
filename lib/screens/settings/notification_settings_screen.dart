@@ -107,8 +107,14 @@ class _NotificationSettingsScreenState
           : _lowStockFreq == 'weekly'
               ? 168
               : _lowStockCustomHours;
+      final lowCount = inventory.lowStockProducts.length;
+      // Fire an immediate notification so user sees it right away
+      await ns.showLowStockNow(
+        lowStockCount: lowCount,
+        totalProducts: inventory.products.length,
+      );
       await ns.scheduleLowStockCheck(
-        lowStockCount: inventory.lowStockProducts.length,
+        lowStockCount: lowCount,
         totalProducts: inventory.products.length,
         interval: Duration(hours: hours),
       );

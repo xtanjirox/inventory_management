@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/activity.dart';
+import '../../models/product_variant.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/inventory_provider.dart';
 import '../../widgets/ad_banner.dart';
@@ -23,7 +24,7 @@ class DashboardScreen extends StatelessWidget {
     final totalProducts = inventory.products.length;
     final lowStockProducts = inventory.lowStockProducts;
     final totalValue = inventory.products
-        .fold<double>(0, (sum, p) => sum + (p.price * p.stock));
+        .fold<double>(0, (sum, p) => sum + (p.price * inventory.effectiveStock(p)));
     final categoryCount = inventory.categories.length;
     final currency = user?.currency ?? 'USD';
 
@@ -34,10 +35,14 @@ class DashboardScreen extends StatelessWidget {
         .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
         .join();
 
+    final cs = Theme.of(context).colorScheme;
+    final surface = cs.surface;
+    final scaffoldBg = Theme.of(context).scaffoldBackgroundColor;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: scaffoldBg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF8FAFC),
+        backgroundColor: scaffoldBg,
         elevation: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -49,7 +54,7 @@ class DashboardScreen extends StatelessWidget {
             ),
             Text(
               'Here\'s your inventory today',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.5)),
             ),
           ],
         ),
@@ -168,7 +173,7 @@ class DashboardScreen extends StatelessWidget {
                     const SizedBox(height: 8),
                     Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: surface,
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
@@ -246,7 +251,7 @@ class DashboardScreen extends StatelessWidget {
                   else
                     Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: surface,
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
@@ -266,8 +271,7 @@ class DashboardScreen extends StatelessWidget {
                             height: 1, indent: 72),
                         itemBuilder: (context, index) {
                           final product = inventory.products[index];
-                          final isLow =
-                              product.stock <= product.lowStockThreshold;
+                          final isLow = inventory.isProductLowStock(product);
                           return ListTile(
                             contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 4),
@@ -316,7 +320,7 @@ class DashboardScreen extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Text(
-                                  '${product.stock} units',
+                                  '${inventory.effectiveStock(product)} units',
                                   style: TextStyle(
                                     color: isLow
                                         ? Colors.red
@@ -354,7 +358,7 @@ class DashboardScreen extends StatelessWidget {
                   else
                     Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: surface,
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
@@ -456,10 +460,11 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surface = Theme.of(context).colorScheme.surface;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -489,7 +494,9 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             title,
-            style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                fontSize: 12),
           ),
         ],
       ),
@@ -506,7 +513,31 @@ class _LowStockTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isOutOfStock = product.stock == 0;
+    final variants = ProductVariant.decodeList(product.variantsJson as String?);
+    final hasVariants = variants.isNotEmpty;
+
+    String subtitle;
+    bool isOutOfStock;
+
+    if (hasVariants) {
+      final lowVariants = variants
+          .where((v) => v.stock <= (product.lowStockThreshold as int))
+          .toList();
+      isOutOfStock = lowVariants.every((v) => v.stock == 0);
+      if (isOutOfStock) {
+        subtitle = 'Out of stock in: ${lowVariants.map((v) => v.name).join(', ')}';
+      } else {
+        subtitle = lowVariants
+            .map((v) => '${v.name}: ${v.stock} left')
+            .join(' · ');
+      }
+    } else {
+      isOutOfStock = (product.stock as int) == 0;
+      subtitle = isOutOfStock
+          ? 'Out of stock'
+          : '${product.stock} left · threshold ${product.lowStockThreshold}';
+    }
+
     return ListTile(
       contentPadding:
           const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -515,7 +546,9 @@ class _LowStockTile extends StatelessWidget {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: isOutOfStock ? Colors.red[50] : Colors.orange[50],
+          color: isOutOfStock
+              ? Colors.red.withValues(alpha: 0.1)
+              : Colors.orange.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(
@@ -530,13 +563,12 @@ class _LowStockTile extends StatelessWidget {
           style: const TextStyle(
               fontWeight: FontWeight.w600, fontSize: 14)),
       subtitle: Text(
-        isOutOfStock
-            ? 'Out of stock'
-            : '${product.stock} left · threshold ${product.lowStockThreshold}',
+        subtitle,
         style: TextStyle(
             fontSize: 12,
-            color:
-                isOutOfStock ? Colors.red[700] : Colors.orange[700]),
+            color: isOutOfStock ? Colors.red[700] : Colors.orange[700]),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
       ),
       trailing: const Icon(Icons.chevron_right, size: 18),
     );
@@ -654,19 +686,22 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surface = Theme.of(context).colorScheme.surface;
+    final cs = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: surface,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         children: [
-          Icon(icon, size: 36, color: Colors.grey[300]),
+          Icon(icon, size: 36, color: cs.onSurface.withValues(alpha: 0.2)),
           const SizedBox(height: 8),
           Text(message,
-              style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+              style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.4), fontSize: 13)),
         ],
       ),
     );

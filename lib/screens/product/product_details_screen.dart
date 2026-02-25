@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:barcode_widget/barcode_widget.dart';
 
 import '../../models/activity.dart';
+import '../../models/product_variant.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/inventory_provider.dart';
 import '../../widgets/app_dialogs.dart';
@@ -24,6 +25,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   void _showAdjustStockDialog(BuildContext context, InventoryProvider inventory) {
     final product = inventory.getProductById(widget.productId);
     if (product == null) return;
+    final variants = ProductVariant.decodeList(product.variantsJson);
 
     showModalBottomSheet(
       context: context,
@@ -31,13 +33,22 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => _StockOperationSheet(
         product: product,
-        onConfirm: (type, delta, note) async {
-          final newStock = (product.stock + delta).clamp(0, 999999).toInt();
-          await inventory.adjustStock(product.id, newStock,
-              type: type, note: note);
-          if (context.mounted) {
-            AppDialogs.snack(context, 'Stock updated → $newStock units',
-                success: true);
+        variants: variants,
+        onConfirm: (type, delta, note, variantId) async {
+          if (variantId != null) {
+            final v = variants.firstWhere((v) => v.id == variantId);
+            final newVStock = (v.stock + delta).clamp(0, 999999).toInt();
+            await inventory.adjustVariantStock(product.id, variantId, newVStock,
+                type: type, note: note);
+            if (context.mounted) {
+              AppDialogs.snack(context, '${v.name} stock → $newVStock units', success: true);
+            }
+          } else {
+            final newStock = (product.stock + delta).clamp(0, 999999).toInt();
+            await inventory.adjustStock(product.id, newStock, type: type, note: note);
+            if (context.mounted) {
+              AppDialogs.snack(context, 'Stock updated → $newStock units', success: true);
+            }
           }
         },
       ),
@@ -74,7 +85,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
     final category = inventory.getCategoryById(product.categoryId);
     final warehouse = inventory.getWarehouseById(product.warehouseId);
-    final isLowStock = product.stock <= product.lowStockThreshold;
+    final variants = ProductVariant.decodeList(product.variantsJson);
+    final hasVariants = variants.isNotEmpty;
+    final isLowStock = inventory.isProductLowStock(product);
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -110,9 +124,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 width: 200,
                 height: 200,
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
+                  color: cs.onSurface.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.grey[300]!),
+                  border: Border.all(color: cs.outlineVariant),
                   image: product.imageUrl != null
                       ? DecorationImage(
                           image: NetworkImage(product.imageUrl!),
@@ -121,10 +135,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       : null,
                 ),
                 child: product.imageUrl == null
-                    ? const Icon(
+                    ? Icon(
                         Icons.inventory_2,
                         size: 80,
-                        color: Colors.grey,
+                        color: cs.onSurface.withValues(alpha: 0.3),
                       )
                     : null,
               ),
@@ -178,7 +192,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               ],
             ),
             const SizedBox(height: 24),
-            if (product.description.isNotEmpty) ...[
+            if (product.description.isNotEmpty && product.description != '') ...[
               const Text(
                 'Description',
                 style: TextStyle(
@@ -189,8 +203,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               const SizedBox(height: 8),
               Text(
                 product.description,
-                style: const TextStyle(
-                  color: Colors.grey,
+                style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.55),
                   height: 1.5,
                 ),
               ),
@@ -211,7 +225,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   child: _buildInfoCard(
                     context,
                     'In Stock',
-                    '${product.stock} units',
+                    hasVariants
+                        ? '${inventory.effectiveStock(product)} units total'
+                        : '${product.stock} units',
                     Icons.inventory_2_outlined,
                     valueColor: isLowStock ? Colors.red : null,
                   ),
@@ -243,7 +259,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   child: _buildInfoCard(
                     context,
                     'Supplier',
-                    product.supplier,
+                    product.supplier.isEmpty ? '—' : product.supplier,
                     Icons.local_shipping_outlined,
                   ),
                 ),
@@ -258,15 +274,19 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 ),
               ],
             ),
+
+            // ── Variants section ──────────────────────────────────────────
+            if (hasVariants) ..._buildVariantsSection(context, variants, product.lowStockThreshold, cs),
+
             const SizedBox(height: 48),
-            if (product.sku.isNotEmpty) ...[
+            if (product.sku.isNotEmpty && product.sku != '') ...[
               Center(
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: cs.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey[300]!),
+                    border: Border.all(color: cs.outlineVariant),
                   ),
                   child: BarcodeWidget(
                     barcode: Barcode.code128(), // Barcode type
@@ -313,15 +333,16 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     IconData icon, {
     Color? valueColor,
   }) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -332,13 +353,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         children: [
           Row(
             children: [
-              Icon(icon, size: 16, color: Colors.grey[600]),
+              Icon(icon, size: 16, color: cs.onSurface.withValues(alpha: 0.4)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   title,
                   style: TextStyle(
-                    color: Colors.grey[600],
+                    color: cs.onSurface.withValues(alpha: 0.45),
                     fontSize: 12,
                   ),
                   maxLines: 1,
@@ -353,7 +374,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 14,
-              color: valueColor,
+              color: valueColor ?? cs.onSurface,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -362,18 +383,64 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       ),
     );
   }
+
+  List<Widget> _buildVariantsSection(
+    BuildContext context,
+    List<ProductVariant> variants,
+    int threshold,
+    dynamic colorScheme,
+  ) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return [
+      const SizedBox(height: 24),
+      const Text('Variants',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 12),
+      Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: Theme.of(context)
+                  .colorScheme
+                  .outlineVariant
+                  .withValues(alpha: 0.5)),
+        ),
+        child: Column(
+          children: [
+            for (int i = 0; i < variants.length; i++) ...[
+              if (i > 0)
+                Divider(
+                    height: 1,
+                    indent: 16,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.07)),
+              _VariantRow(
+                variant: variants[i],
+                threshold: threshold,
+                primary: primary,
+              ),
+            ],
+          ],
+        ),
+      ),
+    ];
+  }
 }
 
 // ── Stock Operation Bottom Sheet ───────────────────────────────────────────────
 
 typedef _OpCallback = Future<void> Function(
-    ActivityType type, int delta, String? note);
+    ActivityType type, int delta, String? note, String? variantId);
 
 class _StockOperationSheet extends StatefulWidget {
   final dynamic product;
+  final List<ProductVariant> variants;
   final _OpCallback onConfirm;
   const _StockOperationSheet(
-      {required this.product, required this.onConfirm});
+      {required this.product, required this.variants, required this.onConfirm});
 
   @override
   State<_StockOperationSheet> createState() => _StockOperationSheetState();
@@ -394,6 +461,7 @@ class _StockOperationSheetState extends State<_StockOperationSheet> {
   ];
 
   int _selectedOp = 0;
+  int _selectedVariantIdx = 0;
   final _amountCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
   bool _saving = false;
@@ -408,15 +476,22 @@ class _StockOperationSheetState extends State<_StockOperationSheet> {
   @override
   Widget build(BuildContext context) {
     final op = _ops[_selectedOp];
-    final currentStock = widget.product.stock as int;
+    final hasVariants = widget.variants.isNotEmpty;
+    final currentStock = hasVariants
+        ? widget.variants[_selectedVariantIdx].stock
+        : widget.product.stock as int;
+    final selectedVariantId =
+        hasVariants ? widget.variants[_selectedVariantIdx].id : null;
     final amount = int.tryParse(_amountCtrl.text) ?? 0;
     final delta = op.isAddition ? amount : -amount;
     final preview = (currentStock + delta).clamp(0, 999999);
 
+    final surface = Theme.of(context).colorScheme.surface;
+    final cs = Theme.of(context).colorScheme;
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom + 24,
@@ -432,7 +507,7 @@ class _StockOperationSheetState extends State<_StockOperationSheet> {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey[300],
+                color: cs.onSurface.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -442,10 +517,39 @@ class _StockOperationSheetState extends State<_StockOperationSheet> {
               style:
                   TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          Text('Current: $currentStock units',
-              style:
-                  TextStyle(fontSize: 13, color: Colors.grey[500])),
+          Text(
+            hasVariants
+                ? 'Variant: ${widget.variants[_selectedVariantIdx].name} · $currentStock units'
+                : 'Current: $currentStock units',
+            style: TextStyle(
+                fontSize: 13,
+                color: cs.onSurface.withValues(alpha: 0.5)),
+          ),
           const SizedBox(height: 16),
+
+          // Variant picker
+          if (hasVariants) ...[  
+            DropdownButtonFormField<int>(
+              value: _selectedVariantIdx,
+              decoration: const InputDecoration(
+                labelText: 'Select variant',
+                isDense: true,
+              ),
+              items: [
+                for (int i = 0; i < widget.variants.length; i++)
+                  DropdownMenuItem(
+                    value: i,
+                    child: Text(
+                      '${widget.variants[i].name}  (${widget.variants[i].stock} in stock)',
+                    ),
+                  ),
+              ],
+              onChanged: (v) {
+                if (v != null) setState(() { _selectedVariantIdx = v; _amountCtrl.clear(); });
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
 
           // Operation type chips
           SizedBox(
@@ -466,7 +570,7 @@ class _StockOperationSheetState extends State<_StockOperationSheet> {
                     decoration: BoxDecoration(
                       color: sel
                           ? o.color.withValues(alpha: 0.12)
-                          : Colors.grey[100],
+                          : cs.onSurface.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                           color: sel ? o.color : Colors.transparent,
@@ -476,8 +580,9 @@ class _StockOperationSheetState extends State<_StockOperationSheet> {
                       children: [
                         Icon(o.icon,
                             size: 16,
-                            color:
-                                sel ? o.color : Colors.grey[500]),
+                            color: sel
+                                ? o.color
+                                : cs.onSurface.withValues(alpha: 0.4)),
                         const SizedBox(width: 6),
                         Text(o.label,
                             style: TextStyle(
@@ -487,7 +592,7 @@ class _StockOperationSheetState extends State<_StockOperationSheet> {
                                     : FontWeight.normal,
                                 color: sel
                                     ? o.color
-                                    : Colors.grey[600])),
+                                    : cs.onSurface.withValues(alpha: 0.55))),
                       ],
                     ),
                   ),
@@ -583,7 +688,7 @@ class _StockOperationSheetState extends State<_StockOperationSheet> {
                           ? raw - currentStock
                           : (op.isAddition ? raw : -raw);
                       await widget.onConfirm(
-                          op.type, d, _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim());
+                          op.type, d, _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(), selectedVariantId);
                       if (mounted) Navigator.pop(context);
                     },
               child: _saving
@@ -608,4 +713,96 @@ class _Op {
   final Color color;
   final bool isAddition;
   const _Op(this.type, this.label, this.icon, this.color, this.isAddition);
+}
+
+// ── Variant row ────────────────────────────────────────────────────────────────
+
+class _VariantRow extends StatelessWidget {
+  final ProductVariant variant;
+  final int threshold;
+  final Color primary;
+  const _VariantRow(
+      {required this.variant, required this.threshold, required this.primary});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isLow = variant.stock <= threshold;
+    final isOut = variant.stock == 0;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(Icons.label_outline_rounded,
+                color: primary.withValues(alpha: 0.6), size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(variant.name,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: cs.onSurface)),
+                if (variant.sku != null && variant.sku!.isNotEmpty)
+                  Text('SKU: ${variant.sku}',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: cs.onSurface.withValues(alpha: 0.45))),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isOut
+                      ? Colors.red.withValues(alpha: 0.1)
+                      : isLow
+                          ? Colors.orange.withValues(alpha: 0.1)
+                          : Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  isOut ? 'Out of stock' : '${variant.stock} units',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isOut
+                        ? Colors.red[700]
+                        : isLow
+                            ? Colors.orange[700]
+                            : Colors.green[700],
+                  ),
+                ),
+              ),
+              if (variant.price != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    '+${variant.price!.toStringAsFixed(2)}',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: cs.onSurface.withValues(alpha: 0.45)),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }

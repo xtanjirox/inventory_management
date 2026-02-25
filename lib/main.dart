@@ -38,22 +38,23 @@ class InventoryApp extends StatelessWidget {
 
   static ThemeData _buildTheme({required bool dark}) {
     const primary = Color(0xFF1152D4);
-    final surface = dark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
-    final cardColor = dark ? const Color(0xFF1E293B) : Colors.white;
+    final scaffoldBg = dark ? const Color(0xFF0D1117) : const Color(0xFFF1F5F9);
+    final cardColor = dark ? const Color(0xFF1C2333) : Colors.white;
+    final borderColor = dark ? const Color(0xFF2D3748) : const Color(0xFFE2E8F0);
     final brightness = dark ? Brightness.dark : Brightness.light;
 
     return ThemeData(
       colorScheme: ColorScheme.fromSeed(
         seedColor: primary,
         brightness: brightness,
-        surface: surface,
+        surface: cardColor,
       ),
       useMaterial3: true,
-      scaffoldBackgroundColor: surface,
+      scaffoldBackgroundColor: scaffoldBg,
       textTheme: GoogleFonts.interTextTheme(
           dark ? ThemeData.dark().textTheme : ThemeData.light().textTheme),
       appBarTheme: AppBarTheme(
-        backgroundColor: surface,
+        backgroundColor: scaffoldBg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -81,13 +82,11 @@ class InventoryApp extends StatelessWidget {
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: const BorderRadius.all(Radius.circular(14)),
-          borderSide: BorderSide(
-              color: dark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+          borderSide: BorderSide(color: borderColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: const BorderRadius.all(Radius.circular(14)),
-          borderSide: BorderSide(
-              color: dark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+          borderSide: BorderSide(color: borderColor),
         ),
         focusedBorder: const OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(14)),
@@ -133,7 +132,7 @@ class InventoryApp extends StatelessWidget {
         side: BorderSide.none,
       ),
       dividerTheme: DividerThemeData(
-        color: dark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+        color: borderColor,
         thickness: 1,
         space: 1,
       ),

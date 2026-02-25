@@ -144,6 +144,8 @@ class Product {
   final int lowStockThreshold;
   final String supplier;
   final String? imageUrl;
+  final String? imagePath;
+  final String? variantsJson;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
@@ -162,6 +164,8 @@ class Product {
     required this.lowStockThreshold,
     this.supplier = '',
     this.imageUrl,
+    this.imagePath,
+    this.variantsJson,
     DateTime? createdAt,
     DateTime? updatedAt,
     this.deletedAt,
@@ -182,6 +186,9 @@ class Product {
     int? lowStockThreshold,
     String? supplier,
     String? imageUrl,
+    String? imagePath,
+    bool clearImagePath = false,
+    String? variantsJson,
     DateTime? updatedAt,
     DateTime? deletedAt,
     bool? isSynced,
@@ -199,6 +206,8 @@ class Product {
       lowStockThreshold: lowStockThreshold ?? this.lowStockThreshold,
       supplier: supplier ?? this.supplier,
       imageUrl: imageUrl ?? this.imageUrl,
+      imagePath: clearImagePath ? null : (imagePath ?? this.imagePath),
+      variantsJson: variantsJson ?? this.variantsJson,
       createdAt: createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
       deletedAt: deletedAt ?? this.deletedAt,
@@ -219,6 +228,8 @@ class Product {
         'low_stock_threshold': lowStockThreshold,
         'supplier': supplier,
         'image_url': imageUrl,
+        'image_path': imagePath,
+        'variants_json': variantsJson,
         'created_at': createdAt.millisecondsSinceEpoch,
         'updated_at': updatedAt.millisecondsSinceEpoch,
         'deleted_at': deletedAt?.millisecondsSinceEpoch,
@@ -238,6 +249,8 @@ class Product {
         lowStockThreshold: map['low_stock_threshold'] as int,
         supplier: map['supplier'] as String? ?? '',
         imageUrl: map['image_url'] as String?,
+        imagePath: map['image_path'] as String?,
+        variantsJson: map['variants_json'] as String?,
         createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int),
         updatedAt: DateTime.fromMillisecondsSinceEpoch(map['updated_at'] as int),
         deletedAt: map['deleted_at'] != null

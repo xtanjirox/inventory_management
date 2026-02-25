@@ -22,7 +22,7 @@ class AppDatabase {
     final path = join(dbPath, 'inventory.db');
     return openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onConfigure: _onConfigure,
@@ -72,6 +72,8 @@ class AppDatabase {
         low_stock_threshold INTEGER NOT NULL DEFAULT 10,
         supplier            TEXT NOT NULL DEFAULT '',
         image_url           TEXT,
+        image_path          TEXT,
+        variants_json       TEXT,
         created_at          INTEGER NOT NULL,
         updated_at          INTEGER NOT NULL,
         deleted_at          INTEGER,
@@ -128,6 +130,12 @@ class AppDatabase {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 4) {
+      await db.execute(
+          'ALTER TABLE products ADD COLUMN image_path TEXT');
+      await db.execute(
+          'ALTER TABLE products ADD COLUMN variants_json TEXT');
+    }
     if (oldVersion < 3) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS activities (

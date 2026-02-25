@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
+import '../../providers/inventory_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../services/export_service.dart';
 import '../profile/profile_screen.dart';
+import '../tools/import_screen.dart';
 import 'notification_settings_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -142,6 +145,56 @@ class SettingsScreen extends StatelessWidget {
           ]),
           const SizedBox(height: 20),
 
+          // ── Data Tools card ──────────────────────────────────────────────
+          _SectionLabel(label: 'Data'),
+          _SettingsCard(children: [
+            _SettingsTile(
+              iconData: Icons.upload_file_rounded,
+              iconColor: const Color(0xFF059669),
+              title: 'Export to CSV',
+              value: 'Spreadsheet',
+              onTap: () async {
+                final inventory = Provider.of<InventoryProvider>(context, listen: false);
+                final catMap = {for (final c in inventory.categories) c.id: c.name};
+                final whMap = {for (final w in inventory.warehouses) w.id: w.name};
+                await ExportService.instance.exportToCsv(
+                  inventory.products,
+                  categoryNames: catMap,
+                  warehouseNames: whMap,
+                  currency: user?.currency ?? 'USD',
+                );
+              },
+            ),
+            const _SettingsDivider(),
+            _SettingsTile(
+              iconData: Icons.picture_as_pdf_rounded,
+              iconColor: const Color(0xFFDC2626),
+              title: 'Export to PDF',
+              value: 'Report',
+              onTap: () async {
+                final inventory = Provider.of<InventoryProvider>(context, listen: false);
+                final catMap = {for (final c in inventory.categories) c.id: c.name};
+                final whMap = {for (final w in inventory.warehouses) w.id: w.name};
+                await ExportService.instance.exportToPdf(
+                  inventory.products,
+                  categoryNames: catMap,
+                  warehouseNames: whMap,
+                  currency: user?.currency ?? 'USD',
+                );
+              },
+            ),
+            const _SettingsDivider(),
+            _SettingsTile(
+              iconData: Icons.download_rounded,
+              iconColor: const Color(0xFF2563EB),
+              title: 'Import from CSV',
+              value: 'Bulk add products',
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ImportScreen())),
+            ),
+          ]),
+          const SizedBox(height: 20),
+
           // ── Notifications card ───────────────────────────────────────────
           _SectionLabel(label: 'Notifications'),
           _SettingsCard(children: [
@@ -207,7 +260,7 @@ class SettingsScreen extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 16),
               decoration: BoxDecoration(
-                color: Colors.red[50],
+                color: Colors.red.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
               ),
@@ -272,9 +325,10 @@ class _SettingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -294,7 +348,10 @@ class _SettingsDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Divider(height: 1, indent: 56, color: Color(0xFFF1F5F9));
+    return Divider(
+        height: 1,
+        indent: 56,
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08));
   }
 }
 
@@ -343,20 +400,22 @@ class _SettingsTile extends StatelessWidget {
     Widget? trailingWidget = trailing;
     if (trailingWidget == null) {
       if (value != null) {
+        final cs2 = Theme.of(context).colorScheme;
         trailingWidget = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(value!,
-                style: const TextStyle(
-                    fontSize: 13, color: Color(0xFF94A3B8))),
+                style: TextStyle(
+                    fontSize: 13,
+                    color: cs2.onSurface.withValues(alpha: 0.45))),
             const SizedBox(width: 4),
-            const Icon(Icons.chevron_right_rounded,
-                color: Color(0xFFCBD5E1), size: 20),
+            Icon(Icons.chevron_right_rounded,
+                color: cs2.onSurface.withValues(alpha: 0.25), size: 20),
           ],
         );
       } else if (onTap != null) {
-        trailingWidget = const Icon(Icons.chevron_right_rounded,
-            color: Color(0xFFCBD5E1), size: 20);
+        trailingWidget = Icon(Icons.chevron_right_rounded,
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.25), size: 20);
       }
     }
 
@@ -377,10 +436,10 @@ class _SettingsTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(title,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w500,
-                            color: Color(0xFF0D1B3E))),
+                            color: Theme.of(context).colorScheme.onSurface)),
                     if (subtitle != null) ...[
                       const SizedBox(height: 2),
                       Text(subtitle!,

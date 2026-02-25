@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 
-import '../../providers/inventory_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/inventory_provider.dart';
+import '../../services/export_service.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -30,14 +31,38 @@ class _StatsScreenState extends State<StatsScreen> {
       ..sort((a, b) => (b.price * b.stock).compareTo(a.price * a.stock));
     final top5 = sortedProducts.take(5).toList();
 
+    final cs = Theme.of(context).colorScheme;
+    final catMap = {for (final c in inventory.categories) c.id: c.name};
+    final whMap = {for (final w in inventory.warehouses) w.id: w.name};
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Analytics'),
         actions: [
-          IconButton(
+          PopupMenuButton<String>(
             icon: const Icon(Icons.file_download_outlined),
-            onPressed: () {},
             tooltip: 'Export',
+            onSelected: (v) async {
+              if (v == 'csv') {
+                await ExportService.instance.exportToCsv(
+                  inventory.products,
+                  categoryNames: catMap,
+                  warehouseNames: whMap,
+                  currency: currency,
+                );
+              } else {
+                await ExportService.instance.exportToPdf(
+                  inventory.products,
+                  categoryNames: catMap,
+                  warehouseNames: whMap,
+                  currency: currency,
+                );
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'csv', child: Text('Export as CSV')),
+              const PopupMenuItem(value: 'pdf', child: Text('Export as PDF')),
+            ],
           ),
         ],
       ),
@@ -50,23 +75,24 @@ class _StatsScreenState extends State<StatsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Overview',
+                Text('Overview',
                     style: TextStyle(
                         fontSize: 18, fontWeight: FontWeight.bold,
-                        color: Color(0xFF0D1B3E))),
+                        color: cs.onSurface)),
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: cs.surface,
                     borderRadius: BorderRadius.circular(20),
-                    border: const Border.fromBorderSide(
-                        BorderSide(color: Color(0xFFE2E8F0))),
+                    border: Border.fromBorderSide(
+                        BorderSide(color: cs.outlineVariant)),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: _selectedPeriod,
                       isDense: true,
+                      dropdownColor: cs.surface,
                       icon: Icon(Icons.keyboard_arrow_down_rounded,
                           color: primary, size: 18),
                       style: TextStyle(
@@ -145,7 +171,7 @@ class _StatsScreenState extends State<StatsScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: cs.surface,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
@@ -157,15 +183,16 @@ class _StatsScreenState extends State<StatsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Stock Value Trend',
+                  Text('Stock Value Trend',
                       style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF0D1B3E))),
+                          color: cs.onSurface)),
                   const SizedBox(height: 4),
                   Text('Weekly overview',
-                      style:
-                          TextStyle(fontSize: 12, color: Colors.grey[500])),
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurface.withValues(alpha: 0.45))),
                   const SizedBox(height: 20),
                   SizedBox(
                     height: 180,
@@ -226,7 +253,7 @@ class _StatsScreenState extends State<StatsScreen> {
                           drawVerticalLine: false,
                           horizontalInterval: 25,
                           getDrawingHorizontalLine: (_) => FlLine(
-                            color: const Color(0xFFF1F5F9),
+                            color: cs.onSurface.withValues(alpha: 0.06),
                             strokeWidth: 1,
                           ),
                         ),
@@ -249,11 +276,11 @@ class _StatsScreenState extends State<StatsScreen> {
             const SizedBox(height: 24),
 
             // ── Top products ──────────────────────────────────────────────
-            const Text('Top Products by Value',
+            Text('Top Products by Value',
                 style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF0D1B3E))),
+                    color: cs.onSurface)),
             const SizedBox(height: 12),
             if (inventory.products.isEmpty)
               Center(
@@ -266,7 +293,7 @@ class _StatsScreenState extends State<StatsScreen> {
             else
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: cs.surface,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
@@ -279,8 +306,8 @@ class _StatsScreenState extends State<StatsScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: top5.length,
-                  separatorBuilder: (_, __) => const Divider(
-                      height: 1, indent: 68, color: Color(0xFFF1F5F9)),
+                  separatorBuilder: (_, __) => Divider(
+                      height: 1, indent: 68, color: cs.onSurface.withValues(alpha: 0.06)),
                   itemBuilder: (context, index) {
                     final product = top5[index];
                     final value = product.price * product.stock;
@@ -371,10 +398,11 @@ class _KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -397,14 +425,15 @@ class _KpiCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(value,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF0D1B3E))),
+                  color: cs.onSurface)),
           const SizedBox(height: 2),
           Text(title,
-              style:
-                  TextStyle(fontSize: 12, color: Colors.grey[500])),
+              style: TextStyle(
+                  fontSize: 12,
+                  color: cs.onSurface.withValues(alpha: 0.45))),
           const SizedBox(height: 6),
           Row(
             children: [

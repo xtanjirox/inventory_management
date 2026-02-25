@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../models/models.dart';
 import '../models/activity.dart';
+import '../models/models.dart';
+import '../models/product_variant.dart';
 import '../repositories/category_repository.dart';
 import '../repositories/warehouse_repository.dart';
 import '../repositories/product_repository.dart';
@@ -27,8 +28,27 @@ class InventoryProvider with ChangeNotifier {
   List<Warehouse> get warehouses => [..._warehouses];
   List<Product> get products => [..._products];
   List<Activity> get recentActivities => [..._recentActivities];
+  /// Total stock across all products (including variant stocks when variants exist)
+  int get totalStock => _products.fold(0, (s, p) => s + effectiveStock(p));
+
+  /// Effective stock for a product: sum of variant stocks if variants exist, else product.stock
+  int effectiveStock(Product p) {
+    final variants = ProductVariant.decodeList(p.variantsJson);
+    if (variants.isEmpty) return p.stock;
+    return variants.fold(0, (s, v) => s + v.stock);
+  }
+
+  /// A product is low stock if:
+  /// - No variants: stock <= lowStockThreshold
+  /// - Has variants: any variant's stock <= lowStockThreshold (or total variant stock <= threshold)
+  bool isProductLowStock(Product p) {
+    final variants = ProductVariant.decodeList(p.variantsJson);
+    if (variants.isEmpty) return p.stock <= p.lowStockThreshold;
+    return variants.any((v) => v.stock <= p.lowStockThreshold);
+  }
+
   List<Product> get lowStockProducts =>
-      _products.where((p) => p.stock <= p.lowStockThreshold).toList();
+      _products.where(isProductLowStock).toList();
 
   String? _currentUserId;
 
@@ -240,6 +260,42 @@ class InventoryProvider with ChangeNotifier {
         note: note,
       );
     }
+  }
+
+  /// Adjust a specific variant's stock. Also syncs product.stock = sum of all variant stocks.
+  Future<void> adjustVariantStock(
+    String productId,
+    String variantId,
+    int newVariantStock, {
+    ActivityType type = ActivityType.stockAdjustment,
+    String? note,
+  }) async {
+    final index = _products.indexWhere((p) => p.id == productId);
+    if (index < 0) return;
+
+    final product = _products[index];
+    final variants = ProductVariant.decodeList(product.variantsJson);
+    final vIndex = variants.indexWhere((v) => v.id == variantId);
+    if (vIndex < 0) return;
+
+    final oldStock = variants[vIndex].stock;
+    variants[vIndex] = variants[vIndex].copyWith(stock: newVariantStock);
+    final totalStock = variants.fold(0, (s, v) => s + v.stock);
+
+    final updated = product.copyWith(
+      variantsJson: ProductVariant.encodeList(variants),
+      stock: totalStock,
+    );
+    _products[index] = updated;
+    notifyListeners();
+    await _productRepo.update(updated);
+    await _logActivity(
+      type: type,
+      productId: productId,
+      productName: updated.name,
+      quantityChange: newVariantStock - oldStock,
+      note: note,
+    );
   }
 
   Future<void> _logActivity({

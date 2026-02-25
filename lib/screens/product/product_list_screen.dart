@@ -28,6 +28,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
     final inventory = Provider.of<InventoryProvider>(context);
     final currency = Provider.of<AuthProvider>(context, listen: false).currentUser?.currency ?? 'USD';
     final primary = Theme.of(context).colorScheme.primary;
+    final cs = Theme.of(context).colorScheme;
     final categories = [
       {'id': 'All', 'name': 'All'},
       ...inventory.categories.map((c) => {'id': c.id, 'name': c.name}),
@@ -97,7 +98,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                   // Search bar
                   Container(
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: cs.surface,
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
@@ -154,12 +155,12 @@ class _ProductListScreenState extends State<ProductListScreen> {
                             decoration: BoxDecoration(
                               color: isSelected
                                   ? primary
-                                  : Colors.white,
+                                  : cs.surface,
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
                                 color: isSelected
                                     ? primary
-                                    : const Color(0xFFE2E8F0),
+                                    : cs.outlineVariant,
                               ),
                             ),
                             child: Text(
@@ -171,7 +172,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                     : FontWeight.normal,
                                 color: isSelected
                                     ? Colors.white
-                                    : const Color(0xFF64748B),
+                                    : cs.onSurface.withValues(alpha: 0.6),
                               ),
                             ),
                           ),
@@ -185,7 +186,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                     '${filteredProducts.length} product${filteredProducts.length == 1 ? '' : 's'}',
                     style: TextStyle(
                         fontSize: 13,
-                        color: Colors.grey[500],
+                        color: cs.onSurface.withValues(alpha: 0.45),
                         fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 8),
@@ -204,7 +205,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
+                        color: cs.onSurface.withValues(alpha: 0.06),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(Icons.inventory_2_outlined,
@@ -236,8 +237,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     final product = filteredProducts[index];
-                    final isLowStock =
-                        product.stock <= product.lowStockThreshold;
+                    final isLowStock = inventory.isProductLowStock(product);
                     final category = inventory.getCategoryById(product.categoryId);
 
                     return Padding(
@@ -252,7 +252,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                         ),
                         child: Container(
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: cs.surface,
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
@@ -297,10 +297,10 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                     children: [
                                       Text(
                                         product.name,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontWeight: FontWeight.w700,
                                           fontSize: 15,
-                                          color: Color(0xFF0D1B3E),
+                                          color: cs.onSurface,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -311,7 +311,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                           category.name,
                                           style: TextStyle(
                                               fontSize: 12,
-                                              color: Colors.grey[500]),
+                                              color: cs.onSurface.withValues(alpha: 0.45)),
                                         ),
                                       const SizedBox(height: 6),
                                       Row(
@@ -342,7 +342,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Icon(Icons.chevron_right_rounded,
-                                        color: Colors.grey[300], size: 20),
+                                        color: cs.onSurface.withValues(alpha: 0.2), size: 20),
                                   ],
                                 ),
                               ),

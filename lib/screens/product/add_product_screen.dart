@@ -1,8 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 import '../../models/models.dart';
+import '../../models/product_variant.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/inventory_provider.dart';
 import '../../utils/plan_limits.dart';
@@ -30,6 +35,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
   
   String? _selectedCategoryId;
   String? _selectedWarehouseId;
+  String? _pickedImagePath;
+  late TextEditingController _supplierController;
+  late List<ProductVariant> _variants;
 
   @override
   void initState() {
@@ -40,9 +48,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _priceController = TextEditingController(text: widget.productToEdit?.price.toString() ?? '');
     _stockController = TextEditingController(text: widget.productToEdit?.stock.toString() ?? '');
     _lowStockController = TextEditingController(text: widget.productToEdit?.lowStockThreshold.toString() ?? '10');
-    
+    _supplierController = TextEditingController(text: widget.productToEdit?.supplier ?? '');
     _selectedCategoryId = widget.productToEdit?.categoryId;
     _selectedWarehouseId = widget.productToEdit?.warehouseId;
+    _pickedImagePath = widget.productToEdit?.imagePath;
+    _variants = ProductVariant.decodeList(widget.productToEdit?.variantsJson);
   }
 
   @override
@@ -53,7 +63,92 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _priceController.dispose();
     _stockController.dispose();
     _lowStockController.dispose();
+    _supplierController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    final picker = ImagePicker();
+    final xFile = await picker.pickImage(source: source, imageQuality: 80, maxWidth: 800);
+    if (xFile == null || !mounted) return;
+    final appDir = await getApplicationDocumentsDirectory();
+    final filename = 'product_${DateTime.now().millisecondsSinceEpoch}${p.extension(xFile.path)}';
+    final saved = await File(xFile.path).copy('${appDir.path}/$filename');
+    setState(() => _pickedImagePath = saved.path);
+  }
+
+  void _showImageSourceSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Take Photo'),
+              onTap: () { Navigator.pop(context); _pickImage(ImageSource.camera); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from Gallery'),
+              onTap: () { Navigator.pop(context); _pickImage(ImageSource.gallery); },
+            ),
+            if (_pickedImagePath != null)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('Remove Image', style: TextStyle(color: Colors.red)),
+                onTap: () { Navigator.pop(context); setState(() => _pickedImagePath = null); },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _addVariant() {
+    final nameCtrl = TextEditingController();
+    final skuCtrl = TextEditingController();
+    final priceCtrl = TextEditingController();
+    final stockCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Add Variant'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Variant Name (e.g. Small, Red)')),
+            const SizedBox(height: 12),
+            TextField(controller: skuCtrl, decoration: const InputDecoration(labelText: 'Variant SKU (optional)')),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: TextField(controller: priceCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Price (optional)'))),
+              const SizedBox(width: 12),
+              Expanded(child: TextField(controller: stockCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Stock'))),
+            ]),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              if (nameCtrl.text.trim().isEmpty) return;
+              setState(() {
+                _variants.add(ProductVariant(
+                  name: nameCtrl.text.trim(),
+                  sku: skuCtrl.text.trim().isEmpty ? null : skuCtrl.text.trim(),
+                  price: double.tryParse(priceCtrl.text),
+                  stock: int.tryParse(stockCtrl.text) ?? 0,
+                ));
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _scanBarcode() async {
@@ -160,7 +255,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
         price: double.tryParse(_priceController.text) ?? 0.0,
         stock: int.tryParse(_stockController.text) ?? 0,
         lowStockThreshold: int.tryParse(_lowStockController.text) ?? 10,
+        supplier: _supplierController.text.trim(),
         imageUrl: widget.productToEdit?.imageUrl,
+        imagePath: _pickedImagePath,
+        variantsJson: _variants.isNotEmpty
+            ? ProductVariant.encodeList(_variants)
+            : null,
       );
 
       if (isEdit) {
@@ -215,53 +315,54 @@ class _AddProductScreenState extends State<AddProductScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
-                child: Stack(
-                  children: [
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[200],
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.grey[300]!,
-                          style: BorderStyle.solid,
+                child: GestureDetector(
+                  onTap: _showImageSourceSheet,
+                  child: Stack(
+                    children: [
+                      Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.outlineVariant,
+                          ),
+                          image: _pickedImagePath != null
+                              ? DecorationImage(
+                                  image: FileImage(File(_pickedImagePath!)),
+                                  fit: BoxFit.cover,
+                                )
+                              : widget.productToEdit?.imageUrl != null
+                                  ? DecorationImage(
+                                      image: NetworkImage(widget.productToEdit!.imageUrl!),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
                         ),
-                        image: widget.productToEdit?.imageUrl != null
-                            ? DecorationImage(
-                                image: NetworkImage(widget.productToEdit!.imageUrl!),
-                                fit: BoxFit.cover,
+                        child: (_pickedImagePath == null && widget.productToEdit?.imageUrl == null)
+                            ? Icon(
+                                Icons.add_a_photo_outlined,
+                                size: 40,
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
                               )
                             : null,
                       ),
-                      child: widget.productToEdit?.imageUrl == null
-                          ? const Icon(
-                              Icons.add_a_photo_outlined,
-                              size: 40,
-                              color: Colors.grey,
-                            )
-                          : null,
-                    ),
-                    Positioned(
-                      right: -10,
-                      bottom: -10,
-                      child: IconButton(
-                        onPressed: () {},
-                        icon: Container(
-                          padding: const EdgeInsets.all(8),
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
                             color: Theme.of(context).colorScheme.primary,
                             shape: BoxShape.circle,
+                            border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2),
                           ),
-                          child: const Icon(
-                            Icons.edit,
-                            color: Colors.white,
-                            size: 16,
-                          ),
+                          child: const Icon(Icons.edit, color: Colors.white, size: 14),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 32),
@@ -463,6 +564,60 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   return null;
                 },
               ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _supplierController,
+                decoration: InputDecoration(
+                  labelText: 'Supplier (optional)',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // ── Variants ────────────────────────────────────────────────
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Variants',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  TextButton.icon(
+                    onPressed: _addVariant,
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Add Variant'),
+                  ),
+                ],
+              ),
+              if (_variants.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    'No variants. Tap "Add Variant" to add size/color/etc. variants.',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45)),
+                  ),
+                )
+              else
+                ...List.generate(_variants.length, (i) {
+                  final v = _variants[i];
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      title: Text(v.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text(
+                          'Stock: ${v.stock}${v.price != null ? '  ·  Price: ${v.price!.toStringAsFixed(2)}' : ''}${v.sku != null ? '  ·  SKU: ${v.sku}' : ''}',
+                          style: const TextStyle(fontSize: 12)),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () => setState(() => _variants.removeAt(i)),
+                      ),
+                    ),
+                  );
+                }),
+
               const SizedBox(height: 48),
               SizedBox(
                 width: double.infinity,
