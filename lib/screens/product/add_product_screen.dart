@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
-import 'package:flutter/services.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
@@ -58,19 +57,43 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   Future<void> _scanBarcode() async {
-    String barcodeScanRes;
-    try {
-      barcodeScanRes = await FlutterBarcodeScanner.scanBarcode(
-          '#1152D4', 'Cancel', true, ScanMode.BARCODE);
-    } on PlatformException {
-      barcodeScanRes = 'Failed to get platform version.';
-    }
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Scan Barcode', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                ],
+              ),
+            ),
+            Expanded(
+              child: MobileScanner(
+                onDetect: (capture) {
+                  final List<Barcode> barcodes = capture.barcodes;
+                  if (barcodes.isNotEmpty && barcodes.first.rawValue != null) {
+                    Navigator.pop(context, barcodes.first.rawValue);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
 
     if (!mounted) return;
 
-    if (barcodeScanRes != '-1' && barcodeScanRes != 'Unknown') {
+    if (result != null && result.isNotEmpty) {
       setState(() {
-        _skuController.text = barcodeScanRes;
+        _skuController.text = result;
       });
     }
   }

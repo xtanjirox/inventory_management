@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:provider/provider.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../providers/inventory_provider.dart';
 import '../../widgets/app_dialogs.dart';
@@ -20,38 +19,55 @@ class _ScannerScreenState extends State<ScannerScreen> {
   String _scanBarcode = 'Unknown';
 
   Future<void> scanBarcodeNormal(BuildContext context, InventoryProvider inventory) async {
-    String barcodeScanRes;
-    try {
-      barcodeScanRes = await FlutterBarcodeScanner.scanBarcode(
-          '#1152D4', 'Cancel', true, ScanMode.BARCODE);
-    } on PlatformException {
-      barcodeScanRes = 'Failed to get platform version.';
-    }
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Scan Barcode', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                ],
+              ),
+            ),
+            Expanded(
+              child: MobileScanner(
+                onDetect: (capture) {
+                  final List<Barcode> barcodes = capture.barcodes;
+                  if (barcodes.isNotEmpty && barcodes.first.rawValue != null) {
+                    Navigator.pop(context, barcodes.first.rawValue);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
 
     if (!mounted) return;
 
-    setState(() {
-      _scanBarcode = barcodeScanRes;
-    });
+    if (result != null && result.isNotEmpty) {
+      setState(() {
+        _scanBarcode = result;
+      });
 
-    if (barcodeScanRes != '-1' && barcodeScanRes != 'Unknown') {
-      final product = inventory.getProductById(barcodeScanRes);
-      
+      final product = inventory.getProductById(result);
       if (product != null) {
-        // Product found, go to details
-        if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ProductDetailsScreen(productId: product.id),
-            ),
-          );
-        }
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductDetailsScreen(productId: product.id),
+          ),
+        );
       } else {
-        // Product not found, offer to add
-        if (mounted) {
-          _showUnknownBarcodeDialog(context, barcodeScanRes);
-        }
+        _showUnknownBarcodeDialog(context, result);
       }
     }
   }

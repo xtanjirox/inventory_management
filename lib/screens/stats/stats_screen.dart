@@ -173,7 +173,25 @@ class _StatsScreenState extends State<StatsScreen> {
                       BarChartData(
                         alignment: BarChartAlignment.spaceAround,
                         maxY: 100,
-                        barTouchData: BarTouchData(enabled: false),
+                        barTouchData: BarTouchData(
+                          enabled: true,
+                          touchTooltipData: BarTouchTooltipData(
+                            getTooltipColor: (_) => const Color(0xFF0D1B3E),
+                            tooltipPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            tooltipMargin: 8,
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                              return BarTooltipItem(
+                                '$currency ${rod.toY.toInt()}',
+                                const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
                         titlesData: FlTitlesData(
                           show: true,
                           bottomTitles: AxisTitles(
