@@ -22,7 +22,7 @@ class AppDatabase {
     final path = join(dbPath, 'inventory.db');
     return openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onConfigure: _onConfigure,
@@ -122,7 +122,8 @@ class AppDatabase {
         quantity_change INTEGER,
         note            TEXT,
         user_id         TEXT NOT NULL,
-        timestamp       INTEGER NOT NULL
+        timestamp       INTEGER NOT NULL,
+        is_synced       INTEGER NOT NULL DEFAULT 0
       )
     ''');
     await db.execute(
@@ -130,6 +131,10 @@ class AppDatabase {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 5) {
+      await db.execute(
+          'ALTER TABLE activities ADD COLUMN is_synced INTEGER NOT NULL DEFAULT 0');
+    }
     if (oldVersion < 4) {
       await db.execute(
           'ALTER TABLE products ADD COLUMN image_path TEXT');
@@ -146,7 +151,8 @@ class AppDatabase {
           quantity_change INTEGER,
           note            TEXT,
           user_id         TEXT NOT NULL,
-          timestamp       INTEGER NOT NULL
+          timestamp       INTEGER NOT NULL,
+          is_synced       INTEGER NOT NULL DEFAULT 0
         )
       ''');
     }

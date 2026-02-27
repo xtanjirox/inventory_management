@@ -42,6 +42,7 @@ class Activity {
   final String? note;
   final String userId;
   final DateTime timestamp;
+  final bool isSynced;
 
   Activity({
     String? id,
@@ -52,8 +53,25 @@ class Activity {
     this.note,
     required this.userId,
     DateTime? timestamp,
+    this.isSynced = false,
   })  : id = (id == null || id.isEmpty) ? _uuid.v4() : id,
         timestamp = timestamp ?? DateTime.now();
+
+  Activity copyWith({
+    bool? isSynced,
+  }) {
+    return Activity(
+      id: id,
+      type: type,
+      productId: productId,
+      productName: productName,
+      quantityChange: quantityChange,
+      note: note,
+      userId: userId,
+      timestamp: timestamp,
+      isSynced: isSynced ?? this.isSynced,
+    );
+  }
 
   Map<String, dynamic> toMap() => {
         'id': id,
@@ -64,6 +82,7 @@ class Activity {
         'note': note,
         'user_id': userId,
         'timestamp': timestamp.millisecondsSinceEpoch,
+        'is_synced': isSynced ? 1 : 0,
       };
 
   factory Activity.fromMap(Map<String, dynamic> map) => Activity(
@@ -79,5 +98,6 @@ class Activity {
         userId: map['user_id'] as String,
         timestamp:
             DateTime.fromMillisecondsSinceEpoch(map['timestamp'] as int),
+        isSynced: (map['is_synced'] as int?) == 1,
       );
 }

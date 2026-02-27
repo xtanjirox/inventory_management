@@ -114,6 +114,7 @@ class SupabaseSyncService implements SyncService {
       final unsynced = await _activityRepo.getUnsyncedActivities();
       for (final act in unsynced) {
         final data = act.toMap();
+        data.remove('is_synced');
         data['user_id'] = _userId;
         await _client.from('activities').upsert(data);
         await _activityRepo.markActivitySynced(act.id, act.id);

@@ -22,14 +22,12 @@ class ActivityRepository {
 
   Future<List<Activity>> getUnsyncedActivities() async {
     final db = await _db.database;
-    final rows = await db.query('activities');
-    // Activities are immutable in this app so we just return all local activities.
-    // In a full sync model, we'd add a synced flag to activities table.
-    return rows.map((r) => Activity.fromMap(r)).toList();
+    return _dao.getUnsynced(db);
   }
 
   Future<void> markActivitySynced(String id, String serverId) async {
-    // No-op for now. A full sync requires adding a synced flag to the activities table.
+    final db = await _db.database;
+    await _dao.markSynced(db, id);
   }
 
   Future<Activity> insert(Activity activity) async {

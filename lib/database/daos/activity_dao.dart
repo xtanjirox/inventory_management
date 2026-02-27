@@ -31,11 +31,21 @@ class ActivityDao {
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<void> deleteOlderThan(Database db, DateTime cutoff) async {
-    await db.delete(
+  Future<List<Activity>> getUnsynced(Database db) async {
+    final rows = await db.query(
       table,
-      where: 'timestamp < ?',
-      whereArgs: [cutoff.millisecondsSinceEpoch],
+      where: 'is_synced = ?',
+      whereArgs: [0],
+    );
+    return rows.map(Activity.fromMap).toList();
+  }
+
+  Future<void> markSynced(Database db, String id) async {
+    await db.update(
+      table,
+      {'is_synced': 1},
+      where: 'id = ?',
+      whereArgs: [id],
     );
   }
 }
