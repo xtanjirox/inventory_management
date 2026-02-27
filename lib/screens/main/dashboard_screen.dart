@@ -5,7 +5,9 @@ import '../../models/activity.dart';
 import '../../models/product_variant.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/inventory_provider.dart';
+import '../../providers/sync_provider.dart';
 import '../../widgets/ad_banner.dart';
+import '../settings/cloud_sync_settings_screen.dart';
 import '../product/low_stock_screen.dart';
 import '../product/product_details_screen.dart';
 import '../product/product_list_screen.dart';
@@ -59,6 +61,7 @@ class DashboardScreen extends StatelessWidget {
           ],
         ),
         actions: [
+          if (auth.isPro) _SyncStatusButton(cs: cs),
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
             onPressed: () => Navigator.push(
@@ -675,6 +678,100 @@ class _ActivityDisplayInfo {
   final Color color;
   final String label;
   const _ActivityDisplayInfo(this.icon, this.color, this.label);
+}
+
+// ── Sync status button (Pro only) ────────────────────────────────────────────
+
+class _SyncStatusButton extends StatefulWidget {
+  final ColorScheme cs;
+  const _SyncStatusButton({required this.cs});
+
+  @override
+  State<_SyncStatusButton> createState() => _SyncStatusButtonState();
+}
+
+class _SyncStatusButtonState extends State<_SyncStatusButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _spin;
+
+  @override
+  void initState() {
+    super.initState();
+    _spin = AnimationController(
+        vsync: this, duration: const Duration(seconds: 1));
+  }
+
+  @override
+  void dispose() {
+    _spin.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sync = context.watch<SyncProvider>();
+
+    if (sync.isSyncing) {
+      _spin.repeat();
+    } else {
+      _spin.stop();
+      _spin.reset();
+    }
+
+    final (icon, color) = switch (sync.status) {
+      SyncStatus.syncing => (Icons.sync_rounded, Colors.blue),
+      SyncStatus.success => (Icons.cloud_done_outlined, Colors.green),
+      SyncStatus.error   => (Icons.cloud_off_rounded, Colors.red),
+      SyncStatus.idle    => (Icons.cloud_upload_outlined, widget.cs.onSurface.withValues(alpha: 0.6)),
+    };
+
+    final pendingCount = sync.pending.total;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          tooltip: 'Cloud Sync',
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const CloudSyncSettingsScreen()),
+          ),
+          icon: sync.isSyncing
+              ? RotationTransition(
+                  turns: _spin,
+                  child: Icon(Icons.sync_rounded, color: color),
+                )
+              : Icon(icon, color: color),
+        ),
+        if (pendingCount > 0 && !sync.isSyncing)
+          Positioned(
+            right: 6,
+            top: 6,
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: Colors.orange,
+                shape: BoxShape.circle,
+                border: Border.all(
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    width: 1.5),
+              ),
+              child: Center(
+                child: Text(
+                  pendingCount > 9 ? '9+' : '$pendingCount',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 // ── Empty state ─────────────────────────────────────────────────────────────

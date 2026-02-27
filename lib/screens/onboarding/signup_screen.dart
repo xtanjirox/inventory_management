@@ -42,7 +42,32 @@ class _SignUpScreenState extends State<SignUpScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (error != null) {
+    if (error == 'confirm_email') {
+      // Supabase requires email confirmation — show dialog and go to login
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Confirm your email'),
+          content: Text(
+            'We sent a confirmation link to ${_emailController.text}.\n\nPlease check your inbox and click the link, then come back and log in.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    } else if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error), backgroundColor: Colors.red),
       );

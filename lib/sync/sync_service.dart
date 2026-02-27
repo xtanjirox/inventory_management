@@ -1,84 +1,126 @@
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../repositories/category_repository.dart';
 import '../repositories/warehouse_repository.dart';
 import '../repositories/product_repository.dart';
+import '../repositories/activity_repository.dart';
 
 /// Abstract interface for synchronization backends.
-/// Implement this with [SupabaseSyncService] once Supabase is configured.
 abstract class SyncService {
   Future<void> syncAll();
   Future<void> syncCategories();
   Future<void> syncWarehouses();
   Future<void> syncProducts();
+  Future<void> syncActivities();
 }
 
-/// No-op local sync service. Used when cloud sync is disabled.
-/// Replace with [SupabaseSyncService] once the user enables cloud sync.
-class LocalSyncService implements SyncService {
+/// Supabase implementation of SyncService.
+class SupabaseSyncService implements SyncService {
+  final SupabaseClient _client = Supabase.instance.client;
   final CategoryRepository _categoryRepo;
   final WarehouseRepository _warehouseRepo;
   final ProductRepository _productRepo;
+  final ActivityRepository _activityRepo;
 
-  LocalSyncService({
+  SupabaseSyncService({
     CategoryRepository? categoryRepo,
     WarehouseRepository? warehouseRepo,
     ProductRepository? productRepo,
+    ActivityRepository? activityRepo,
   })  : _categoryRepo = categoryRepo ?? CategoryRepository(),
         _warehouseRepo = warehouseRepo ?? WarehouseRepository(),
-        _productRepo = productRepo ?? ProductRepository();
+        _productRepo = productRepo ?? ProductRepository(),
+        _activityRepo = activityRepo ?? ActivityRepository();
+
+  String? get _userId => _client.auth.currentUser?.id;
 
   @override
   Future<void> syncAll() async {
+    if (_userId == null) return;
+    
+    // Order matters because of foreign key constraints in Supabase
+    // 1. First sync standalone entities (categories, warehouses)
     await syncCategories();
     await syncWarehouses();
+    
+    // 2. Then sync entities that depend on them (products)
     await syncProducts();
+    
+    // 3. Finally sync entities that depend on products (activities)
+    await syncActivities();
   }
 
   @override
   Future<void> syncCategories() async {
-    // No-op: returns unsynced items for inspection/debugging
-    final unsynced = await _categoryRepo.getUnsynced();
-    assert(unsynced.isEmpty || true, 'Categories pending sync: ${unsynced.length}');
+    if (_userId == null) return;
+    try {
+      final unsynced = await _categoryRepo.getUnsynced();
+      for (final cat in unsynced) {
+        final data = cat.toMap();
+        data.remove('is_synced');
+        data.remove('remote_id');
+        data['user_id'] = _userId;
+        await _client.from('categories').upsert(data);
+        await _categoryRepo.markSynced(cat.id, cat.id);
+      }
+    } catch (e) {
+      debugPrint('Sync categories error: $e');
+      throw e; // rethrow so syncAll stops if a dependency fails
+    }
   }
 
   @override
   Future<void> syncWarehouses() async {
-    final unsynced = await _warehouseRepo.getUnsynced();
-    assert(unsynced.isEmpty || true, 'Warehouses pending sync: ${unsynced.length}');
+    if (_userId == null) return;
+    try {
+      final unsynced = await _warehouseRepo.getUnsynced();
+      for (final wh in unsynced) {
+        final data = wh.toMap();
+        data.remove('is_synced');
+        data.remove('remote_id');
+        data['user_id'] = _userId;
+        await _client.from('warehouses').upsert(data);
+        await _warehouseRepo.markSynced(wh.id, wh.id);
+      }
+    } catch (e) {
+      debugPrint('Sync warehouses error: $e');
+      throw e; // rethrow
+    }
   }
 
   @override
   Future<void> syncProducts() async {
-    final unsynced = await _productRepo.getUnsynced();
-    assert(unsynced.isEmpty || true, 'Products pending sync: ${unsynced.length}');
+    if (_userId == null) return;
+    try {
+      final unsynced = await _productRepo.getUnsynced();
+      for (final prod in unsynced) {
+        final data = prod.toMap();
+        data.remove('is_synced');
+        data.remove('remote_id');
+        data['user_id'] = _userId;
+        await _client.from('products').upsert(data);
+        await _productRepo.markSynced(prod.id, prod.id);
+      }
+    } catch (e) {
+      debugPrint('Sync products error: $e');
+      throw e;
+    }
+  }
+
+  @override
+  Future<void> syncActivities() async {
+    if (_userId == null) return;
+    try {
+      final unsynced = await _activityRepo.getUnsyncedActivities();
+      for (final act in unsynced) {
+        final data = act.toMap();
+        data['user_id'] = _userId;
+        await _client.from('activities').upsert(data);
+        await _activityRepo.markActivitySynced(act.id, act.id);
+      }
+    } catch (e) {
+      debugPrint('Sync activities error: $e');
+      throw e;
+    }
   }
 }
-
-// ---------------------------------------------------------------------------
-// Stub for future Supabase implementation.
-//
-// class SupabaseSyncService implements SyncService {
-//   final SupabaseClient _client;
-//   final CategoryRepository _categoryRepo;
-//   final WarehouseRepository _warehouseRepo;
-//   final ProductRepository _productRepo;
-//
-//   SupabaseSyncService(this._client, ...);
-//
-//   @override
-//   Future<void> syncAll() async {
-//     await syncCategories();
-//     await syncWarehouses();
-//     await syncProducts();
-//   }
-//
-//   @override
-//   Future<void> syncCategories() async {
-//     final unsynced = await _categoryRepo.getUnsynced();
-//     for (final cat in unsynced) {
-//       await _client.from('categories').upsert(cat.toMap());
-//       await _categoryRepo.markSynced(cat.id, cat.id); // use Supabase row id
-//     }
-//   }
-//   // ... same for warehouses and products
-// }
-// ---------------------------------------------------------------------------

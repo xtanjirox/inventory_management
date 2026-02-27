@@ -1,25 +1,43 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'providers/auth_provider.dart';
 import 'providers/inventory_provider.dart';
+import 'providers/sync_provider.dart';
 import 'providers/theme_provider.dart';
+import 'services/notification_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main/main_screen.dart';
 import 'screens/onboarding/welcome_screen.dart';
-import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await NotificationService.instance.initialize();
   } catch (_) {}
+  await Supabase.initialize(
+    url: 'https://nlmgfzvcgbfusewjxfjz.supabase.co',
+    anonKey: 'sb_publishable_LId7sNip87EEost-lns_nQ_89UJsyTe',
+  );
+
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
+  // Initialize Google Mobile Ads
+  await MobileAds.instance.initialize();
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => SyncProvider()),
         ChangeNotifierProxyProvider<AuthProvider, InventoryProvider>(
           create: (_) => InventoryProvider(),
           update: (_, auth, inventory) {

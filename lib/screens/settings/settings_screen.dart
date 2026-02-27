@@ -8,6 +8,7 @@ import '../../services/export_service.dart';
 import '../profile/profile_screen.dart';
 import '../tools/import_screen.dart';
 import 'notification_settings_screen.dart';
+import 'cloud_sync_settings_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -228,7 +229,8 @@ class SettingsScreen extends StatelessWidget {
                       color: Color(0xFFCBD5E1), size: 20)
                   : _ProTag(),
               onTap: isPro
-                  ? () {}
+                  ? () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const CloudSyncSettingsScreen()))
                   : () => Navigator.push(context,
                       MaterialPageRoute(builder: (_) => const ProfileScreen())),
             ),

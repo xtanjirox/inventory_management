@@ -1,10 +1,56 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'dart:io' show Platform;
 
 import '../providers/auth_provider.dart';
 
-class AdBannerWidget extends StatelessWidget {
+class AdBannerWidget extends StatefulWidget {
   const AdBannerWidget({super.key});
+
+  @override
+  State<AdBannerWidget> createState() => _AdBannerWidgetState();
+}
+
+class _AdBannerWidgetState extends State<AdBannerWidget> {
+  BannerAd? _bannerAd;
+  bool _isLoaded = false;
+
+  final String _adUnitId = Platform.isAndroid
+      ? 'ca-app-pub-3940256099942544/6300978111' // Android Test Banner ID
+      : 'ca-app-pub-3940256099942544/2934735716'; // iOS Test Banner ID
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAd();
+  }
+
+  void _loadAd() {
+    _bannerAd = BannerAd(
+      adUnitId: _adUnitId,
+      request: const AdRequest(),
+      size: AdSize.banner,
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          debugPrint('$ad loaded.');
+          setState(() {
+            _isLoaded = true;
+          });
+        },
+        onAdFailedToLoad: (ad, err) {
+          debugPrint('BannerAd failed to load: $err');
+          ad.dispose();
+        },
+      ),
+    )..load();
+  }
+
+  @override
+  void dispose() {
+    _bannerAd?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,50 +69,9 @@ class AdBannerWidget extends StatelessWidget {
           ),
         ),
       ),
-      child: Row(
-        children: [
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              'AD',
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[600],
-                letterSpacing: 0.5,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Upgrade to Pro — remove ads & unlock unlimited products',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          TextButton(
-            onPressed: () {},
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: const Text('Upgrade',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
+      child: _isLoaded && _bannerAd != null
+          ? SafeArea(child: AdWidget(ad: _bannerAd!))
+          : const SizedBox(),
     );
   }
 }
